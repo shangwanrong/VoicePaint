@@ -22,11 +22,11 @@
   // 初始化画布渲染器
   const renderer = new CanvasRenderer(canvas);
 
-  // 初始化各模块（后续PR逐步完善）
+  // 初始化各模块
   const history = new ActionHistory();
-  const parser = new CommandParser();
-  const executor = new CommandExecutor();
   const feedback = new FeedbackSystem();
+  const executor = new CommandExecutor(renderer, history, feedback);
+  const parser = new CommandParser();
   const recognizer = new VoiceRecognizer();
 
   // ===== 光标指示器更新 =====
@@ -63,11 +63,38 @@
     }, 3000);
   }
 
+  // ===== 处理语音识别结果 =====
+  function handleVoiceResult(text) {
+    showSpeechText(text);
+
+    // 解析指令
+    const command = parser.parse(text);
+    if (!command) {
+      console.log('未能解析指令:', text);
+      return;
+    }
+
+    // 处理暂停/恢复
+    if (command.intent === 'pause') {
+      recognizer.pause();
+      return;
+    }
+    if (command.intent === 'resume') {
+      recognizer.start();
+      return;
+    }
+
+    // 执行指令
+    executor.execute(command);
+
+    // 更新UI
+    updateCursorIndicator();
+    updateStatusBar();
+  }
+
   // ===== 语音识别回调设置 =====
   recognizer.onResult = (text) => {
-    showSpeechText(text);
-    console.log('语音识别结果:', text);
-    // 后续PR中接入指令解析
+    handleVoiceResult(text);
   };
 
   recognizer.onInterimResult = (text) => {
@@ -122,6 +149,6 @@
   // ===== 暴露到全局供调试 =====
   window.__voicePaint = {
     renderer, history, parser, executor, feedback, recognizer,
-    updateCursorIndicator, updateStatusBar, showSpeechText
+    updateCursorIndicator, updateStatusBar, showSpeechText, handleVoiceResult
   };
 })();

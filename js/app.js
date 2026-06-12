@@ -16,6 +16,14 @@
   const textCommandInput = document.getElementById('text-command-input');
   const textCommandSend = document.getElementById('text-command-send');
 
+  // 讯飞配置面板
+  const xfyunSettings = document.getElementById('xfyun-settings');
+  const xfyunAppId = document.getElementById('xfyun-appid');
+  const xfyunApiKey = document.getElementById('xfyun-apikey');
+  const xfyunApiSecret = document.getElementById('xfyun-apisecret');
+  const xfyunSaveBtn = document.getElementById('xfyun-save-btn');
+  const xfyunCancelBtn = document.getElementById('xfyun-cancel-btn');
+
   // 状态栏元素
   const currentColor = document.getElementById('current-color');
   const colorText = document.getElementById('color-text');
@@ -34,7 +42,13 @@
   const feedback = new FeedbackSystem();
   const executor = new CommandExecutor(renderer, history, feedback);
   const parser = new CommandParser();
-  const recognizer = new VoiceRecognizer();
+
+  // 语音识别器：优先讯飞，回退浏览器原生
+  const xfyunRecognizer = new XfyunRecognizer();
+  const browserRecognizer = new VoiceRecognizer();
+
+  // 当前使用的识别器
+  let activeRecognizer = null;
 
   // 初始化反馈系统的DOM引用
   feedback.init({
@@ -86,26 +100,11 @@
   function handleCommand(text) {
     showSpeechText(text);
 
-    // 解析指令
     const command = parser.parse(text);
     if (!command) {
       console.log('未能解析指令:', text);
-      if (inputMode === 'text') {
-        textCommandInput.value = '';
-      }
+      if (inputMode === 'text') textCommandInput.value = '';
       return;
-    }
-
-    // 处理暂停/恢复（仅语音模式）
-    if (inputMode === 'voice') {
-      if (command.intent === 'pause') {
-        recognizer.pause();
-        return;
-      }
-      if (command.intent === 'resume') {
-        recognizer.start();
-        return;
-      }
     }
 
     // 执行指令
@@ -115,50 +114,63 @@
     updateCursorIndicator();
     updateStatusBar();
 
-    // 文字模式清空输入框
-    if (inputMode === 'text') {
-      textCommandInput.value = '';
-    }
+    if (inputMode === 'text') textCommandInput.value = '';
   }
 
-  // ===== 语音识别回调设置 =====
-  recognizer.onResult = (text) => {
-    handleCommand(text);
-  };
+  // ===== 设置识别器回调 =====
+  function setupRecognizerCallbacks(recognizer) {
+    recognizer.onResult = (text) => handleCommand(text);
+    recognizer.onInterimResult = (text) => {
+      speechText.textContent = text + '...';
+      speechOverlay.classList.remove('hidden');
+    };
+    recognizer.onStatusChange = (status) => {
+      switch (status) {
+        case 'listening': updateVoiceStatus('listening', '监听中'); break;
+        case 'paused': updateVoiceStatus('', '已暂停'); break;
+        case 'stopped': updateVoiceStatus('', '已停止'); break;
+        case 'error': updateVoiceStatus('error', '错误'); break;
+      }
+    };
+  }
 
-  recognizer.onInterimResult = (text) => {
-    speechText.textContent = text + '...';
-    speechOverlay.classList.remove('hidden');
-  };
-
-  recognizer.onStatusChange = (status) => {
-    switch (status) {
-      case 'listening':
-        updateVoiceStatus('listening', '监听中');
-        break;
-      case 'paused':
-        updateVoiceStatus('', '已暂停');
-        break;
-      case 'stopped':
-        updateVoiceStatus('', '已停止');
-        break;
-      case 'error':
-        updateVoiceStatus('error', '错误');
-        break;
+  // 讯飞识别器回调
+  setupRecognizerCallbacks(xfyunRecognizer);
+  xfyunRecognizer.onError = (error) => {
+    if (error === 'not_configured') {
+      showXfyunSettings();
+    } else if (error === 'not_allowed') {
+      switchToTextMode('麦克风权限被拒绝，已切换到文字模式');
+    } else if (error === 'illegal_access') {
+      showXfyunSettings();
+      alert('讯飞API密钥无效，请检查配置');
+    } else if (error === 'network') {
+      switchToTextMode('语音识别网络不可用，已切换到文字模式');
     }
   };
 
-  // 语音网络错误计数，连续失败自动切换文字模式
-  let voiceNetworkErrors = 0;
-  recognizer.onError = (error) => {
-    if (error === 'not_supported') {
-      switchToTextMode('当前浏览器不支持语音识别，已切换到文字模式');
-    } else if (error === 'not_allowed') {
-      switchToTextMode('麦克风权限被拒绝，已切换到文字模式');
+  // 浏览器原生识别器回调
+  setupRecognizerCallbacks(browserRecognizer);
+  let browserNetworkErrors = 0;
+  browserRecognizer.onError = (error) => {
+    if (error === 'not_supported' || error === 'not_allowed') {
+      // 回退到讯飞
+      if (xfyunRecognizer.isConfigured()) {
+        activeRecognizer = xfyunRecognizer;
+        xfyunRecognizer.start();
+      } else {
+        showXfyunSettings();
+      }
     } else if (error === 'network') {
-      voiceNetworkErrors++;
-      if (voiceNetworkErrors >= 3) {
-        switchToTextMode('语音识别网络不可用，已切换到文字模式');
+      browserNetworkErrors++;
+      if (browserNetworkErrors >= 2) {
+        if (xfyunRecognizer.isConfigured()) {
+          browserRecognizer.stop();
+          activeRecognizer = xfyunRecognizer;
+          xfyunRecognizer.start();
+        } else {
+          switchToTextMode('语音识别网络不可用，已切换到文字模式');
+        }
       }
     }
   };
@@ -166,14 +178,53 @@
   // ===== 切换到文字模式 =====
   function switchToTextMode(reason) {
     inputMode = 'text';
-    recognizer.stop();
+    if (activeRecognizer) {
+      activeRecognizer.stop();
+    }
     textInputBar.classList.remove('hidden');
     updateVoiceStatus('', '文字模式');
-    if (reason) {
-      showSpeechText(reason);
-    }
+    if (reason) showSpeechText(reason);
     textCommandInput.focus();
   }
+
+  // ===== 显示讯飞配置面板 =====
+  function showXfyunSettings() {
+    xfyunSettings.classList.remove('hidden');
+    // 填充已保存的值
+    xfyunAppId.value = xfyunRecognizer.appId;
+    xfyunApiKey.value = xfyunRecognizer.apiKey;
+    xfyunApiSecret.value = xfyunRecognizer.apiSecret;
+  }
+
+  // ===== 讯飞配置保存 =====
+  xfyunSaveBtn.addEventListener('click', () => {
+    const appId = xfyunAppId.value.trim();
+    const apiKey = xfyunApiKey.value.trim();
+    const apiSecret = xfyunApiSecret.value.trim();
+
+    if (!appId || !apiKey || !apiSecret) {
+      alert('请填写所有字段');
+      return;
+    }
+
+    xfyunRecognizer.saveConfig(appId, apiKey, apiSecret);
+    xfyunSettings.classList.add('hidden');
+    startOverlay.classList.add('hidden');
+
+    // 启动讯飞识别
+    inputMode = 'voice';
+    activeRecognizer = xfyunRecognizer;
+    updateCursorIndicator();
+    updateStatusBar();
+    xfyunRecognizer.start();
+  });
+
+  xfyunCancelBtn.addEventListener('click', () => {
+    xfyunSettings.classList.add('hidden');
+    // 回退到文字模式
+    startOverlay.classList.add('hidden');
+    switchToTextMode('未配置讯飞密钥，已切换到文字模式');
+  });
 
   // ===== 启动按钮 - 语音模式 =====
   startVoiceBtn.addEventListener('click', () => {
@@ -182,10 +233,13 @@
     updateCursorIndicator();
     updateStatusBar();
 
-    if (VoiceRecognizer.isSupported()) {
-      recognizer.start();
+    // 优先使用讯飞
+    if (xfyunRecognizer.isConfigured()) {
+      activeRecognizer = xfyunRecognizer;
+      xfyunRecognizer.start();
     } else {
-      switchToTextMode('当前浏览器不支持语音识别，已切换到文字模式');
+      // 显示讯飞配置面板
+      showXfyunSettings();
     }
   });
 
@@ -203,18 +257,14 @@
   // ===== 文字输入事件 =====
   textCommandSend.addEventListener('click', () => {
     const text = textCommandInput.value.trim();
-    if (text) {
-      handleCommand(text);
-    }
+    if (text) handleCommand(text);
   });
 
   textCommandInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       const text = textCommandInput.value.trim();
-      if (text) {
-        handleCommand(text);
-      }
+      if (text) handleCommand(text);
     }
   });
 
@@ -223,7 +273,8 @@
 
   // ===== 暴露到全局供调试 =====
   window.__voicePaint = {
-    renderer, history, parser, executor, feedback, recognizer,
+    renderer, history, parser, executor, feedback,
+    xfyunRecognizer, browserRecognizer,
     updateCursorIndicator, updateStatusBar, showSpeechText, handleCommand,
     switchToTextMode
   };

@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VoicePaint - AI 语音绘图工具</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -74,7 +75,33 @@
           <button id="start-voice-btn" class="start-btn">语音模式</button>
           <button id="start-text-btn" class="start-btn start-btn-secondary">文字模式</button>
         </div>
-        <p class="start-note">语音模式需使用 Edge 浏览器并允许麦克风权限<br>文字模式无需麦克风，手动输入指令</p>
+        <p class="start-note">语音模式使用讯飞语音听写（需配置API密钥）<br>文字模式无需麦克风，手动输入指令</p>
+      </div>
+    </div>
+
+    <!-- 讯飞配置面板 -->
+    <div id="xfyun-settings" class="settings-overlay hidden">
+      <div class="settings-content">
+        <h3>讯飞语音听写配置</h3>
+        <p class="settings-desc">请前往 <a href="https://www.xfyun.cn/services/voicedictation" target="_blank">讯飞开放平台</a> 注册并创建"语音听写"应用，获取以下密钥（免费额度每天500次）</p>
+        <div class="settings-form">
+          <div class="form-group">
+            <label for="xfyun-appid">APPID</label>
+            <input type="text" id="xfyun-appid" placeholder="如: 5a123456" />
+          </div>
+          <div class="form-group">
+            <label for="xfyun-apikey">APIKey</label>
+            <input type="text" id="xfyun-apikey" placeholder="如: a1b2c3d4e5f6..." />
+          </div>
+          <div class="form-group">
+            <label for="xfyun-apisecret">APISecret</label>
+            <input type="text" id="xfyun-apisecret" placeholder="如: 1a2b3c4d5e6f..." />
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button id="xfyun-save-btn" class="start-btn">保存并启动</button>
+          <button id="xfyun-cancel-btn" class="start-btn start-btn-secondary">取消</button>
+        </div>
       </div>
     </div>
   </div>
@@ -84,6 +111,7 @@
   <script src="js/shape-factory.js"></script>
   <script src="js/canvas-renderer.js"></script>
   <script src="js/voice-recognizer.js"></script>
+  <script src="js/xfyun-recognizer.js"></script>
   <script src="js/command-parser.js"></script>
   <script src="js/command-executor.js"></script>
   <script src="js/feedback-system.js"></script>

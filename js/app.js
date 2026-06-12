@@ -63,14 +63,57 @@
     }, 3000);
   }
 
+  // ===== 语音识别回调设置 =====
+  recognizer.onResult = (text) => {
+    showSpeechText(text);
+    console.log('语音识别结果:', text);
+    // 后续PR中接入指令解析
+  };
+
+  recognizer.onInterimResult = (text) => {
+    speechText.textContent = text + '...';
+    speechOverlay.classList.remove('hidden');
+  };
+
+  recognizer.onStatusChange = (status) => {
+    switch (status) {
+      case 'listening':
+        updateVoiceStatus('listening', '监听中');
+        break;
+      case 'paused':
+        updateVoiceStatus('', '已暂停');
+        break;
+      case 'stopped':
+        updateVoiceStatus('', '已停止');
+        break;
+      case 'error':
+        updateVoiceStatus('error', '错误');
+        break;
+    }
+  };
+
+  recognizer.onError = (error) => {
+    if (error === 'not_supported') {
+      alert('当前浏览器不支持语音识别，请使用 Chrome 或 Edge 浏览器');
+    } else if (error === 'not_allowed') {
+      alert('麦克风权限被拒绝，请在浏览器设置中允许麦克风访问');
+      updateVoiceStatus('error', '权限被拒');
+    }
+  };
+
   // ===== 启动按钮 =====
   startBtn.addEventListener('click', () => {
     startOverlay.classList.add('hidden');
     updateCursorIndicator();
     updateStatusBar();
-    updateVoiceStatus('listening', '监听中');
-    // 后续PR中启动语音识别
-    console.log('VoicePaint 已启动');
+
+    // 启动语音识别
+    if (VoiceRecognizer.isSupported()) {
+      recognizer.start();
+    } else {
+      updateVoiceStatus('error', '不支持');
+      alert('当前浏览器不支持语音识别，请使用 Chrome 或 Edge 浏览器');
+    }
   });
 
   // ===== 初始绘制 =====

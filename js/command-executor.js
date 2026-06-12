@@ -25,6 +25,8 @@ class CommandExecutor {
     switch (command.intent) {
       case 'draw_shape':
         return this._executeDrawShape(command.params);
+      case 'draw_preset':
+        return this._executeDrawPreset(command.params);
       case 'set_color':
         return this._executeSetColor(command.params);
       case 'set_linewidth':
@@ -507,5 +509,160 @@ class CommandExecutor {
   _executeResume() {
     // 由 app.js 处理
     return true;
+  }
+
+  /**
+   * 执行预设模板绘制
+   */
+  _executeDrawPreset(params) {
+    const preset = params.preset || 'tree';
+    const cx = this.renderer.cursorX;
+    const cy = this.renderer.cursorY;
+
+    // 如果指定了位置，先移动光标
+    if (params.position) {
+      this.renderer.moveCursorToPosition(params.position);
+    }
+
+    // 如果指定了颜色，更新样式
+    if (params.color) {
+      this.renderer.updateStyle('strokeColor', params.color);
+      this.renderer.updateStyle('fillColor', params.color);
+    }
+
+    const style = this.renderer.getStyleSnapshot();
+    const shapes = [];
+
+    switch (preset) {
+      case 'tree':
+        shapes.push(...this._presetTree(cx, cy, style));
+        break;
+      case 'house':
+        shapes.push(...this._presetHouse(cx, cy, style));
+        break;
+      case 'sun':
+        shapes.push(...this._presetSun(cx, cy, style));
+        break;
+      case 'flower':
+        shapes.push(...this._presetFlower(cx, cy, style));
+        break;
+      case 'face':
+      case 'smiley':
+        shapes.push(...this._presetSmiley(cx, cy, style));
+        break;
+      case 'heart':
+        shapes.push(...this._presetHeart(cx, cy, style));
+        break;
+    }
+
+    // 添加所有图形
+    for (const shape of shapes) {
+      this.renderer.addShape(shape);
+      this.history.push({ type: 'add_shape', shapeId: shape.id, shape });
+    }
+
+    const presetNames = { tree: '树', house: '房子', sun: '太阳', flower: '花', smiley: '笑脸', face: '人脸', heart: '爱心' };
+    if (this.feedback) this.feedback.speak(`已画${presetNames[preset] || preset}`);
+    return true;
+  }
+
+  // ===== 预设模板绘制方法 =====
+
+  _presetTree(cx, cy, style) {
+    const shapes = [];
+    // 树干
+    shapes.push(ShapeFactory.createShape('rect', { x: cx, y: cy + 30, width: 20, height: 60 },
+      { ...style, fillColor: '#8B4513', strokeColor: '#8B4513', fill: true }));
+    // 树冠（三个圆叠加）
+    shapes.push(ShapeFactory.createShape('circle', { x: cx, y: cy - 20, radius: 40 },
+      { ...style, fillColor: '#228B22', strokeColor: '#228B22', fill: true }));
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 25, y: cy, radius: 30 },
+      { ...style, fillColor: '#2E8B57', strokeColor: '#2E8B57', fill: true }));
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 25, y: cy, radius: 30 },
+      { ...style, fillColor: '#2E8B57', strokeColor: '#2E8B57', fill: true }));
+    return shapes;
+  }
+
+  _presetHouse(cx, cy, style) {
+    const shapes = [];
+    // 墙壁
+    shapes.push(ShapeFactory.createShape('rect', { x: cx, y: cy + 20, width: 80, height: 60 },
+      { ...style, fillColor: '#DEB887', strokeColor: '#8B4513', fill: true }));
+    // 屋顶（三角形）
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx, y: cy - 25, size: 100 },
+      { ...style, fillColor: '#B22222', strokeColor: '#8B0000', fill: true }));
+    // 门
+    shapes.push(ShapeFactory.createShape('rect', { x: cx, y: cy + 30, width: 20, height: 30 },
+      { ...style, fillColor: '#8B4513', strokeColor: '#654321', fill: true }));
+    return shapes;
+  }
+
+  _presetSun(cx, cy, style) {
+    const shapes = [];
+    // 太阳本体
+    shapes.push(ShapeFactory.createShape('circle', { x: cx, y: cy, radius: 35 },
+      { ...style, fillColor: '#FFD700', strokeColor: '#FFA500', fill: true }));
+    // 光芒（8条线）
+    for (let i = 0; i < 8; i++) {
+      const angle = (Math.PI * 2 / 8) * i;
+      const x1 = cx + 40 * Math.cos(angle);
+      const y1 = cy + 40 * Math.sin(angle);
+      const x2 = cx + 60 * Math.cos(angle);
+      const y2 = cy + 60 * Math.sin(angle);
+      shapes.push(ShapeFactory.createShape('line', { x1, y1, x2, y2 },
+        { ...style, strokeColor: '#FFA500', lineWidth: 3 }));
+    }
+    return shapes;
+  }
+
+  _presetFlower(cx, cy, style) {
+    const shapes = [];
+    // 花瓣（5个圆）
+    for (let i = 0; i < 5; i++) {
+      const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
+      const px = cx + 20 * Math.cos(angle);
+      const py = cy + 20 * Math.sin(angle);
+      shapes.push(ShapeFactory.createShape('circle', { x: px, y: py, radius: 15 },
+        { ...style, fillColor: '#FF69B4', strokeColor: '#FF1493', fill: true }));
+    }
+    // 花心
+    shapes.push(ShapeFactory.createShape('circle', { x: cx, y: cy, radius: 10 },
+      { ...style, fillColor: '#FFD700', strokeColor: '#FFA500', fill: true }));
+    // 花茎
+    shapes.push(ShapeFactory.createShape('line', { x1: cx, y1: cy + 25, x2: cx, y2: cy + 70 },
+      { ...style, strokeColor: '#228B22', lineWidth: 3 }));
+    return shapes;
+  }
+
+  _presetSmiley(cx, cy, style) {
+    const shapes = [];
+    // 脸
+    shapes.push(ShapeFactory.createShape('circle', { x: cx, y: cy, radius: 40 },
+      { ...style, fillColor: '#FFD700', strokeColor: '#FFA500', fill: true, lineWidth: 2 }));
+    // 左眼
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 15, y: cy - 10, radius: 5 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 右眼
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 15, y: cy - 10, radius: 5 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 嘴巴（用弧线近似，用小圆表示）
+    shapes.push(ShapeFactory.createShape('circle', { x: cx, y: cy + 12, radius: 15 },
+      { ...style, fillColor: '#FF6347', strokeColor: '#FF6347', fill: true }));
+    // 遮挡嘴巴上半部分（用肤色圆覆盖）
+    shapes.push(ShapeFactory.createShape('circle', { x: cx, y: cy + 5, radius: 15 },
+      { ...style, fillColor: '#FFD700', strokeColor: '#FFD700', fill: true }));
+    return shapes;
+  }
+
+  _presetHeart(cx, cy, style) {
+    const shapes = [];
+    // 用两个圆和一个三角形组合成心形
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 15, y: cy - 10, radius: 20 },
+      { ...style, fillColor: '#FF1493', strokeColor: '#FF1493', fill: true }));
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 15, y: cy - 10, radius: 20 },
+      { ...style, fillColor: '#FF1493', strokeColor: '#FF1493', fill: true }));
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx, y: cy + 25, size: 50 },
+      { ...style, fillColor: '#FF1493', strokeColor: '#FF1493', fill: true }));
+    return shapes;
   }
 }

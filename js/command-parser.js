@@ -21,7 +21,8 @@ class CommandParser {
       help: ['帮助', '命令', '怎么用', '有哪些指令', '能做什么'],
       cancel: ['取消', '算了', '不要了'],
       pause: ['暂停', '停止识别'],
-      resume: ['继续', '恢复识别']
+      resume: ['继续', '恢复识别'],
+      draw_preset: ['树', '房子', '太阳', '花', '人脸', '笑脸', '心', '爱心']
     };
 
     // 图形类型关键词
@@ -125,7 +126,7 @@ class CommandParser {
       'undo', 'redo', 'clear', 'save', 'help', 'cancel', 'pause', 'resume',
       'set_fill', 'set_dash', 'set_opacity', 'set_linewidth',
       'draw_direction', 'move_to', 'set_background', 'delete_last',
-      'set_color', 'draw_shape'
+      'draw_preset', 'set_color', 'draw_shape'
     ];
 
     for (const intent of priorityOrder) {
@@ -204,6 +205,8 @@ class CommandParser {
         return this._extractDirectionParams(text);
       case 'set_background':
         return this._extractBackgroundParams(text);
+      case 'draw_preset':
+        return this._extractPresetParams(text);
       case 'delete_last':
         return {};
       case 'undo':
@@ -515,5 +518,26 @@ class CommandParser {
   _extractBackgroundParams(text) {
     const color = this._extractColor(text);
     return { color: color || '#ffffff' };
+  }
+
+  /**
+   * 提取预设模板参数
+   */
+  _extractPresetParams(text) {
+    const presetMap = {
+      '树': 'tree', '房子': 'house', '太阳': 'sun',
+      '花': 'flower', '人脸': 'face', '笑脸': 'smiley',
+      '心': 'heart', '爱心': 'heart'
+    };
+    let preset = null;
+    for (const [keyword, name] of Object.entries(presetMap)) {
+      if (text.includes(keyword)) {
+        preset = name;
+        break;
+      }
+    }
+    const position = this._extractPosition(text);
+    const color = this._extractColor(text);
+    return { preset: preset || 'tree', position, color };
   }
 }

@@ -4,14 +4,14 @@ class CommandParser {
   constructor() {
     // 意图关键词词典
     this.intentKeywords = {
-      draw_shape: ['画', '绘制', '创建', '添加', '来个', '整一个', '写', '写上', '写个'],
+      draw_shape: ['画', '绘制', '创建', '添加', '来个', '整一个', '搞个', '弄个', '写', '写上', '写个'],
       set_color: ['颜色', '换成', '改成', '设为', '颜色改'],
       set_linewidth: ['线宽', '粗细', '粗一点', '细一点', '线粗', '加粗', '变细'],
       set_fill: ['填充', '填色', '实心', '描边', '空心'],
       set_opacity: ['透明度', '半透明', '不透明'],
       set_dash: ['虚线', '实线', '点线'],
-      move_to: ['移到', '移动', '去', '到'],
-      draw_direction: ['向上', '向下', '向左', '向右', '往上', '往下', '往左', '往右'],
+      move_to: ['移到', '移动到', '去', '到'],
+      draw_direction: ['向上画', '向下画', '向左画', '向右画', '往上画', '往下画', '往左画', '往右画'],
       undo: ['撤销', '回退', '取消上一步', '撤回'],
       redo: ['重做', '恢复'],
       clear: ['清空', '清除', '全部删除', '擦掉全部', '全部擦掉'],
@@ -45,30 +45,8 @@ class CommandParser {
       '向右': 'right', '往右': 'right', '右边': 'right', '右方': 'right'
     };
 
-    // 语气词列表（需要过滤）
-    this.fillerWords = ['请', '那个', '嗯', '啊', '呃', '就是', '然后', '的话', '一下', '嘛', '吧', '呢', '哈', '哦', '呀', '啦', '哎'];
-
-    // 批量绘制关键词
-    this.batchKeywords = {
-      '两个': 2, '三个': 3, '四个': 4, '五个': 5,
-      '两': 2, '三': 3, '四': 4, '五': 5,
-      '六': 6, '七': 7, '八': 8, '九': 9, '十': 10
-    };
-
-    // 同义词扩展映射
-    this.synonymMap = {
-      '画': ['画', '绘制', '创建', '添加', '来个', '整一个', '搞个', '弄个'],
-      '圆': ['圆', '圆形', '圆圈', '圆的', '原'],  // "原"是"圆"的常见识别错误
-      '矩形': ['矩形', '长方形', '方形', '方的', '方块', '正方形', '举行'],  // "举行"是"矩形"的常见识别错误
-      '线': ['线', '线条', '直线', '线段'],
-      '三角形': ['三角形', '三角', '三角的', '山脚行'],  // 常见识别错误
-      '星': ['星', '星星', '五角星', '星形', '新型'],  // "新型"是"星形"的常见识别错误
-      '红色': ['红色', '红的', '红'],
-      '蓝色': ['蓝色', '蓝的', '蓝'],
-      '绿色': ['绿色', '绿的', '绿'],
-      '撤销': ['撤销', '回退', '撤回', '退回', '撤消'],
-      '删除': ['删除', '删掉', '去掉', '删', '删了']
-    };
+    // 语气词列表（需要过滤）- 注意只过滤真正无意义的语气词
+    this.fillerWords = ['请', '嗯', '啊', '呃', '哦', '呀', '啦', '哎', '嘛', '呢', '哈'];
   }
 
   /**
@@ -82,6 +60,8 @@ class CommandParser {
     // 预处理：去除语气词和多余空格
     let cleaned = this._preprocess(text);
     console.log('指令解析输入:', text, '→ 清洗后:', cleaned);
+
+    if (!cleaned) return null;
 
     // 识别意图
     const intent = this._identifyIntent(cleaned);
@@ -112,8 +92,8 @@ class CommandParser {
     for (const word of this.fillerWords) {
       result = result.replace(new RegExp(word, 'g'), '');
     }
-    // 去除多余空格
-    result = result.replace(/\s+/g, '').trim();
+    // 合并多余空格（但保留空格，因为数字和中文之间可能有空格）
+    result = result.replace(/\s+/g, ' ').trim();
     return result;
   }
 
@@ -121,12 +101,30 @@ class CommandParser {
    * 识别意图
    */
   _identifyIntent(text) {
+    // 先检查是否包含预设模板关键词
+    const presetKeywords = this.intentKeywords.draw_preset;
+    for (const keyword of presetKeywords) {
+      if (text.includes(keyword)) {
+        // 如果同时包含"画"或类似动词，确认是预设模板
+        const drawVerbs = ['画', '绘制', '创建', '添加', '来个', '整一个', '搞个', '弄个'];
+        for (const verb of drawVerbs) {
+          if (text.includes(verb)) {
+            return 'draw_preset';
+          }
+        }
+        // 即使没有动词，如果只有预设词也当作预设
+        if (text.replace(/\s/g, '').length <= keyword.length + 5) {
+          return 'draw_preset';
+        }
+      }
+    }
+
     // 优先匹配高优先级意图
     const priorityOrder = [
       'undo', 'redo', 'clear', 'save', 'help', 'cancel', 'pause', 'resume',
       'set_fill', 'set_dash', 'set_opacity', 'set_linewidth',
       'draw_direction', 'move_to', 'set_background', 'delete_last',
-      'draw_preset', 'set_color', 'draw_shape'
+      'set_color', 'draw_shape'
     ];
 
     for (const intent of priorityOrder) {
@@ -137,6 +135,8 @@ class CommandParser {
           if (intent === 'set_color' && this._containsShapeKeyword(text)) {
             continue;
           }
+          // 特殊处理：避免 "画一个圆" 中的"圆"被 delete_last 中的"删"误匹配
+          // （不会，因为"画"在 draw_shape 中优先级更高）
           return intent;
         }
       }
@@ -189,6 +189,8 @@ class CommandParser {
     switch (intent) {
       case 'draw_shape':
         return this._extractDrawShapeParams(text);
+      case 'draw_preset':
+        return this._extractPresetParams(text);
       case 'set_color':
         return this._extractColorParams(text);
       case 'set_linewidth':
@@ -205,8 +207,6 @@ class CommandParser {
         return this._extractDirectionParams(text);
       case 'set_background':
         return this._extractBackgroundParams(text);
-      case 'draw_preset':
-        return this._extractPresetParams(text);
       case 'delete_last':
         return {};
       case 'undo':
@@ -239,9 +239,9 @@ class CommandParser {
     params.color = this._extractColor(text);
 
     // 识别尺寸
-    params.size = this._extractNumber(text, ['半径', '大小', '尺寸', '长', '宽', '边长']);
-    params.width = this._extractNumber(text, ['宽']);
-    params.height = this._extractNumber(text, ['高']);
+    params.size = this._extractSizeNumber(text);
+    params.width = this._extractPrefixedNumber(text, ['宽']);
+    params.height = this._extractPrefixedNumber(text, ['高']);
 
     // 识别位置
     params.position = this._extractPosition(text);
@@ -275,14 +275,15 @@ class CommandParser {
   _correctSynonyms(text) {
     let corrected = text;
     const corrections = {
-      '原': '圆',       // "画一个原" → "画一个圆"
-      '举行': '矩形',    // "画一个举行" → "画一个矩形"
-      '山脚行': '三角形', // 常见识别错误
-      '新型': '星形',    // 常见识别错误
-      '简形': '矩形',    // 常见识别错误
-      '原形': '圆形',    // 常见识别错误
-      '画圆': '画圆',    // 保持不变
-      '画原': '画圆'     // 纠错
+      '原': '圆',
+      '举行': '矩形',
+      '山脚行': '三角形',
+      '新型': '星形',
+      '简形': '矩形',
+      '原形': '圆形',
+      '画原': '画圆',
+      '画个原': '画个圆',
+      '画一个原': '画一个圆'
     };
     for (const [wrong, right] of Object.entries(corrections)) {
       if (corrected.includes(wrong)) {
@@ -296,9 +297,20 @@ class CommandParser {
    * 提取批量数量
    */
   _extractBatchCount(text) {
-    for (const [keyword, count] of Object.entries(this.batchKeywords)) {
-      if (text.includes(keyword)) {
-        return count;
+    const batchKeywords = {
+      '两个': 2, '三个': 3, '四个': 4, '五个': 5,
+      '两': 2, '三': 3, '四': 4, '五': 5,
+      '六': 6, '七': 7, '八': 8, '九': 9, '十': 10
+    };
+    for (const [keyword, count] of Object.entries(batchKeywords)) {
+      if (text.includes(keyword + '个') || text.includes(keyword)) {
+        // 确保"两"不是"两个"的一部分时才匹配
+        if (keyword.length === 1 && text.includes(keyword + '个')) {
+          return count;
+        }
+        if (keyword.length > 1) {
+          return count;
+        }
       }
     }
     // 尝试数字提取
@@ -311,6 +323,7 @@ class CommandParser {
    * 识别图形类型
    */
   _identifyShape(text) {
+    // 精确匹配
     for (const [shape, keywords] of Object.entries(this.shapeKeywords)) {
       for (const keyword of keywords) {
         if (text.includes(keyword)) {
@@ -318,11 +331,19 @@ class CommandParser {
         }
       }
     }
-    // 模糊匹配
+    // 模糊匹配：对每个关键词检查是否和文本的子串编辑距离很近
     for (const [shape, keywords] of Object.entries(this.shapeKeywords)) {
       for (const keyword of keywords) {
-        const match = fuzzyMatch(text, [keyword], 1);
-        if (match) return shape;
+        // 在文本中滑动窗口查找相似子串
+        if (keyword.length >= 2 && text.length >= keyword.length) {
+          for (let i = 0; i <= text.length - keyword.length; i++) {
+            const substr = text.substring(i, i + keyword.length);
+            const dist = levenshteinDistance(substr, keyword);
+            if (dist <= 1) {
+              return shape;
+            }
+          }
+        }
       }
     }
     return 'circle'; // 默认画圆
@@ -343,16 +364,36 @@ class CommandParser {
   }
 
   /**
-   * 提取数字参数
+   * 提取尺寸数字（更智能的数字提取）
    */
-  _extractNumber(text, prefixes) {
+  _extractSizeNumber(text) {
+    // 先尝试带前缀的数字
+    const prefixed = this._extractPrefixedNumber(text, ['半径', '大小', '尺寸', '边长']);
+    if (prefixed) return prefixed;
+
+    // 尝试提取独立的数字（不在"角"后面，不在"个"后面）
+    const matches = text.match(/\d+/g);
+    if (matches) {
+      for (const m of matches) {
+        const idx = text.indexOf(m);
+        // 跳过"角"后面的数字（如"5角星"）
+        if (idx > 0 && text[idx - 1] === '角') continue;
+        // 跳过"个"前面的数字（如"3个圆"）
+        if (idx + m.length < text.length && text[idx + m.length] === '个') continue;
+        return parseInt(m);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 提取带前缀的数字
+   */
+  _extractPrefixedNumber(text, prefixes) {
     for (const prefix of prefixes) {
-      const match = text.match(new RegExp(prefix + '(\\d+)'));
+      const match = text.match(new RegExp(prefix + '\\s*(\\d+)'));
       if (match) return parseInt(match[1]);
     }
-    // 尝试直接提取数字（前面没有"角"的）
-    const numMatch = text.match(/(?<![角])(\d+)/);
-    if (numMatch) return parseInt(numMatch[1]);
     return null;
   }
 
@@ -438,7 +479,7 @@ class CommandParser {
     if (text.includes('细一点') || text.includes('变细')) {
       return { delta: -2 };
     }
-    const num = this._extractNumber(text, ['线宽', '粗细', '线粗']);
+    const num = this._extractPrefixedNumber(text, ['线宽', '粗细', '线粗']);
     if (num) return { value: num };
     return { delta: 1 };
   }
@@ -463,7 +504,7 @@ class CommandParser {
     if (text.includes('不透明')) {
       return { value: 1 };
     }
-    const num = this._extractNumber(text, ['透明度']);
+    const num = this._extractPrefixedNumber(text, ['透明度']);
     if (num) return { value: num / 100 };
     return { value: 0.5 };
   }
@@ -490,13 +531,14 @@ class CommandParser {
       return { position };
     }
     // 尝试提取坐标
-    const coordMatch = text.match(/坐标?(\d+)[,，](\d+)/);
+    const coordMatch = text.match(/坐标?\s*(\d+)\s*[,，]\s*(\d+)/);
     if (coordMatch) {
       return { x: parseInt(coordMatch[1]), y: parseInt(coordMatch[2]) };
     }
     // 相对移动
     const direction = this._extractDirection(text);
-    const distance = this._extractNumber(text, ['移动', '走', '移']);
+    const distance = this._extractPrefixedNumber(text, ['移动', '走', '移']) ||
+                     this._extractSizeNumber(text);
     if (direction) {
       return { direction, distance: distance || 50 };
     }
@@ -508,7 +550,8 @@ class CommandParser {
    */
   _extractDirectionParams(text) {
     const direction = this._extractDirection(text);
-    const distance = this._extractNumber(text, ['画', '走', '移']);
+    const distance = this._extractPrefixedNumber(text, ['画', '走', '移']) ||
+                     this._extractSizeNumber(text);
     return { direction, distance: distance || 100 };
   }
 

@@ -58,14 +58,23 @@
       </div>
     </div>
 
+    <!-- 文字输入回退（语音不可用时显示） -->
+    <div id="text-input-bar" class="text-input-bar hidden">
+      <input type="text" id="text-command-input" placeholder="输入指令，如：画一个红色的圆" autocomplete="off" />
+      <button id="text-command-send" class="text-send-btn">发送</button>
+    </div>
+
     <!-- 启动按钮（首次需要用户交互才能启动语音识别） -->
     <div id="start-overlay" class="start-overlay">
       <div class="start-content">
         <h2>VoicePaint</h2>
         <p>AI 语音绘图工具</p>
-        <p class="start-hint">点击下方按钮启动语音控制</p>
-        <button id="start-btn" class="start-btn">开始语音绘图</button>
-        <p class="start-note">请使用 Chrome 或 Edge 浏览器，并允许麦克风权限</p>
+        <p class="start-hint">选择输入模式启动</p>
+        <div class="start-buttons">
+          <button id="start-voice-btn" class="start-btn">语音模式</button>
+          <button id="start-text-btn" class="start-btn start-btn-secondary">文字模式</button>
+        </div>
+        <p class="start-note">语音模式需使用 Edge 浏览器并允许麦克风权限<br>文字模式无需麦克风，手动输入指令</p>
       </div>
     </div>
   </div>

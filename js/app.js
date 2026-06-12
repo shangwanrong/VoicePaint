@@ -6,11 +6,15 @@
   // DOM 元素引用
   const canvas = document.getElementById('paint-canvas');
   const startOverlay = document.getElementById('start-overlay');
-  const startBtn = document.getElementById('start-btn');
+  const startVoiceBtn = document.getElementById('start-voice-btn');
+  const startTextBtn = document.getElementById('start-text-btn');
   const cursorIndicator = document.getElementById('cursor-indicator');
   const voiceStatus = document.getElementById('voice-status');
   const speechOverlay = document.getElementById('speech-overlay');
   const speechText = document.getElementById('speech-text');
+  const textInputBar = document.getElementById('text-input-bar');
+  const textCommandInput = document.getElementById('text-command-input');
+  const textCommandSend = document.getElementById('text-command-send');
 
   // 状态栏元素
   const currentColor = document.getElementById('current-color');
@@ -18,6 +22,9 @@
   const currentLinewidth = document.getElementById('current-linewidth');
   const currentMode = document.getElementById('current-mode');
   const currentPosition = document.getElementById('current-position');
+
+  // 输入模式：voice / text
+  let inputMode = 'text';
 
   // 初始化画布渲染器
   const renderer = new CanvasRenderer(canvas);
@@ -75,25 +82,30 @@
     }, 3000);
   }
 
-  // ===== 处理语音识别结果 =====
-  function handleVoiceResult(text) {
+  // ===== 处理指令文本（语音或文字输入共用） =====
+  function handleCommand(text) {
     showSpeechText(text);
 
     // 解析指令
     const command = parser.parse(text);
     if (!command) {
       console.log('未能解析指令:', text);
+      if (inputMode === 'text') {
+        textCommandInput.value = '';
+      }
       return;
     }
 
-    // 处理暂停/恢复
-    if (command.intent === 'pause') {
-      recognizer.pause();
-      return;
-    }
-    if (command.intent === 'resume') {
-      recognizer.start();
-      return;
+    // 处理暂停/恢复（仅语音模式）
+    if (inputMode === 'voice') {
+      if (command.intent === 'pause') {
+        recognizer.pause();
+        return;
+      }
+      if (command.intent === 'resume') {
+        recognizer.start();
+        return;
+      }
     }
 
     // 执行指令
@@ -102,11 +114,16 @@
     // 更新UI
     updateCursorIndicator();
     updateStatusBar();
+
+    // 文字模式清空输入框
+    if (inputMode === 'text') {
+      textCommandInput.value = '';
+    }
   }
 
   // ===== 语音识别回调设置 =====
   recognizer.onResult = (text) => {
-    handleVoiceResult(text);
+    handleCommand(text);
   };
 
   recognizer.onInterimResult = (text) => {
@@ -131,27 +148,73 @@
     }
   };
 
+  // 语音网络错误计数，连续失败自动切换文字模式
+  let voiceNetworkErrors = 0;
   recognizer.onError = (error) => {
     if (error === 'not_supported') {
-      alert('当前浏览器不支持语音识别，请使用 Chrome 或 Edge 浏览器');
+      switchToTextMode('当前浏览器不支持语音识别，已切换到文字模式');
     } else if (error === 'not_allowed') {
-      alert('麦克风权限被拒绝，请在浏览器设置中允许麦克风访问');
-      updateVoiceStatus('error', '权限被拒');
+      switchToTextMode('麦克风权限被拒绝，已切换到文字模式');
+    } else if (error === 'network') {
+      voiceNetworkErrors++;
+      if (voiceNetworkErrors >= 3) {
+        switchToTextMode('语音识别网络不可用，已切换到文字模式');
+      }
     }
   };
 
-  // ===== 启动按钮 =====
-  startBtn.addEventListener('click', () => {
+  // ===== 切换到文字模式 =====
+  function switchToTextMode(reason) {
+    inputMode = 'text';
+    recognizer.stop();
+    textInputBar.classList.remove('hidden');
+    updateVoiceStatus('', '文字模式');
+    if (reason) {
+      showSpeechText(reason);
+    }
+    textCommandInput.focus();
+  }
+
+  // ===== 启动按钮 - 语音模式 =====
+  startVoiceBtn.addEventListener('click', () => {
+    inputMode = 'voice';
     startOverlay.classList.add('hidden');
     updateCursorIndicator();
     updateStatusBar();
 
-    // 启动语音识别
     if (VoiceRecognizer.isSupported()) {
       recognizer.start();
     } else {
-      updateVoiceStatus('error', '不支持');
-      alert('当前浏览器不支持语音识别，请使用 Chrome 或 Edge 浏览器');
+      switchToTextMode('当前浏览器不支持语音识别，已切换到文字模式');
+    }
+  });
+
+  // ===== 启动按钮 - 文字模式 =====
+  startTextBtn.addEventListener('click', () => {
+    inputMode = 'text';
+    startOverlay.classList.add('hidden');
+    textInputBar.classList.remove('hidden');
+    updateCursorIndicator();
+    updateStatusBar();
+    updateVoiceStatus('', '文字模式');
+    textCommandInput.focus();
+  });
+
+  // ===== 文字输入事件 =====
+  textCommandSend.addEventListener('click', () => {
+    const text = textCommandInput.value.trim();
+    if (text) {
+      handleCommand(text);
+    }
+  });
+
+  textCommandInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const text = textCommandInput.value.trim();
+      if (text) {
+        handleCommand(text);
+      }
     }
   });
 
@@ -161,6 +224,7 @@
   // ===== 暴露到全局供调试 =====
   window.__voicePaint = {
     renderer, history, parser, executor, feedback, recognizer,
-    updateCursorIndicator, updateStatusBar, showSpeechText, handleVoiceResult
+    updateCursorIndicator, updateStatusBar, showSpeechText, handleCommand,
+    switchToTextMode
   };
 })();

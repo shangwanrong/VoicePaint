@@ -45,7 +45,29 @@ class CommandParser {
     };
 
     // 语气词列表（需要过滤）
-    this.fillerWords = ['请', '那个', '嗯', '啊', '呃', '就是', '然后', '的话', '一下', '嘛', '吧', '呢', '哈'];
+    this.fillerWords = ['请', '那个', '嗯', '啊', '呃', '就是', '然后', '的话', '一下', '嘛', '吧', '呢', '哈', '哦', '呀', '啦', '哎'];
+
+    // 批量绘制关键词
+    this.batchKeywords = {
+      '两个': 2, '三个': 3, '四个': 4, '五个': 5,
+      '两': 2, '三': 3, '四': 4, '五': 5,
+      '六': 6, '七': 7, '八': 8, '九': 9, '十': 10
+    };
+
+    // 同义词扩展映射
+    this.synonymMap = {
+      '画': ['画', '绘制', '创建', '添加', '来个', '整一个', '搞个', '弄个'],
+      '圆': ['圆', '圆形', '圆圈', '圆的', '原'],  // "原"是"圆"的常见识别错误
+      '矩形': ['矩形', '长方形', '方形', '方的', '方块', '正方形', '举行'],  // "举行"是"矩形"的常见识别错误
+      '线': ['线', '线条', '直线', '线段'],
+      '三角形': ['三角形', '三角', '三角的', '山脚行'],  // 常见识别错误
+      '星': ['星', '星星', '五角星', '星形', '新型'],  // "新型"是"星形"的常见识别错误
+      '红色': ['红色', '红的', '红'],
+      '蓝色': ['蓝色', '蓝的', '蓝'],
+      '绿色': ['绿色', '绿的', '绿'],
+      '撤销': ['撤销', '回退', '撤回', '退回', '撤消'],
+      '删除': ['删除', '删掉', '去掉', '删', '删了']
+    };
   }
 
   /**
@@ -204,6 +226,9 @@ class CommandParser {
   _extractDrawShapeParams(text) {
     const params = {};
 
+    // 同义词纠错
+    text = this._correctSynonyms(text);
+
     // 识别图形类型
     params.shape = this._identifyShape(text);
 
@@ -224,6 +249,9 @@ class CommandParser {
     // 识别填充模式
     params.fill = this._hasFillKeyword(text);
 
+    // 识别批量数量
+    params.count = this._extractBatchCount(text);
+
     // 识别文字内容
     if (params.shape === 'text') {
       params.text = this._extractTextContent(text);
@@ -236,6 +264,44 @@ class CommandParser {
     }
 
     return params;
+  }
+
+  /**
+   * 同义词纠错：将常见识别错误替换为正确词汇
+   */
+  _correctSynonyms(text) {
+    let corrected = text;
+    const corrections = {
+      '原': '圆',       // "画一个原" → "画一个圆"
+      '举行': '矩形',    // "画一个举行" → "画一个矩形"
+      '山脚行': '三角形', // 常见识别错误
+      '新型': '星形',    // 常见识别错误
+      '简形': '矩形',    // 常见识别错误
+      '原形': '圆形',    // 常见识别错误
+      '画圆': '画圆',    // 保持不变
+      '画原': '画圆'     // 纠错
+    };
+    for (const [wrong, right] of Object.entries(corrections)) {
+      if (corrected.includes(wrong)) {
+        corrected = corrected.replace(wrong, right);
+      }
+    }
+    return corrected;
+  }
+
+  /**
+   * 提取批量数量
+   */
+  _extractBatchCount(text) {
+    for (const [keyword, count] of Object.entries(this.batchKeywords)) {
+      if (text.includes(keyword)) {
+        return count;
+      }
+    }
+    // 尝试数字提取
+    const numMatch = text.match(/(\d+)个/);
+    if (numMatch) return parseInt(numMatch[1]);
+    return 1;
   }
 
   /**

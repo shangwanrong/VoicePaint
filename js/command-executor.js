@@ -70,6 +70,7 @@ class CommandExecutor {
    */
   _executeDrawShape(params) {
     const shape = params.shape || 'circle';
+    const count = params.count || 1;
 
     // 如果指定了位置，先移动光标
     if (params.position) {
@@ -87,66 +88,85 @@ class CommandExecutor {
       this.renderer.updateStyle('fill', params.fill);
     }
 
-    // 根据图形类型创建图形
-    let shapeObj = null;
-    switch (shape) {
-      case 'circle':
-        shapeObj = this.renderer.createCircleAtCursor(params.size || 50);
-        break;
-      case 'rect':
-        shapeObj = this.renderer.createRectAtCursor(
-          params.width || params.size || 100,
-          params.height || params.size || 80
-        );
-        break;
-      case 'line':
-        shapeObj = this.renderer.createLineAtCursor(
-          params.size || 100,
-          params.direction || 'right'
-        );
-        break;
-      case 'triangle':
-        shapeObj = this.renderer.createTriangleAtCursor(params.size || 80);
-        break;
-      case 'ellipse':
-        shapeObj = this.renderer.createEllipseAtCursor(
-          params.width || 60,
-          params.height || 40
-        );
-        break;
-      case 'star':
-        shapeObj = this.renderer.createStarAtCursor(params.size || 50, params.points);
-        break;
-      case 'arrow':
-        shapeObj = this.renderer.createArrowAtCursor(
-          params.size || 100,
-          params.direction || 'right'
-        );
-        break;
-      case 'text':
-        shapeObj = this.renderer.createTextAtCursor(params.text || '文字');
-        break;
-      default:
-        shapeObj = this.renderer.createCircleAtCursor(50);
-    }
-
-    // 添加图形到画布
-    this.renderer.addShape(shapeObj);
-
-    // 记录到操作历史
-    this.history.push({
-      type: 'add_shape',
-      shapeId: shapeObj.id,
-      shape: shapeObj
-    });
-
-    // 语音反馈
+    // 批量绘制
     const shapeNames = {
       circle: '圆', rect: '矩形', line: '线段', triangle: '三角形',
       ellipse: '椭圆', star: '星形', arrow: '箭头', text: '文字'
     };
     const name = shapeNames[shape] || '图形';
-    if (this.feedback) this.feedback.speak(`已画${name}`);
+
+    for (let i = 0; i < count; i++) {
+      // 根据图形类型创建图形
+      let shapeObj = null;
+      switch (shape) {
+        case 'circle':
+          shapeObj = this.renderer.createCircleAtCursor(params.size || 50);
+          break;
+        case 'rect':
+          shapeObj = this.renderer.createRectAtCursor(
+            params.width || params.size || 100,
+            params.height || params.size || 80
+          );
+          break;
+        case 'line':
+          shapeObj = this.renderer.createLineAtCursor(
+            params.size || 100,
+            params.direction || 'right'
+          );
+          break;
+        case 'triangle':
+          shapeObj = this.renderer.createTriangleAtCursor(params.size || 80);
+          break;
+        case 'ellipse':
+          shapeObj = this.renderer.createEllipseAtCursor(
+            params.width || 60,
+            params.height || 40
+          );
+          break;
+        case 'star':
+          shapeObj = this.renderer.createStarAtCursor(params.size || 50, params.points);
+          break;
+        case 'arrow':
+          shapeObj = this.renderer.createArrowAtCursor(
+            params.size || 100,
+            params.direction || 'right'
+          );
+          break;
+        case 'text':
+          shapeObj = this.renderer.createTextAtCursor(params.text || '文字');
+          break;
+        default:
+          shapeObj = this.renderer.createCircleAtCursor(50);
+      }
+
+      // 添加图形到画布
+      this.renderer.addShape(shapeObj);
+
+      // 记录到操作历史
+      this.history.push({
+        type: 'add_shape',
+        shapeId: shapeObj.id,
+        shape: shapeObj
+      });
+
+      // 批量绘制时，每个图形偏移一定距离
+      if (count > 1 && i < count - 1) {
+        const offset = (params.size || 50) * 2.5;
+        this.renderer.setCursor(
+          this.renderer.cursorX + offset,
+          this.renderer.cursorY
+        );
+      }
+    }
+
+    // 语音反馈
+    if (this.feedback) {
+      if (count > 1) {
+        this.feedback.speak(`已画${count}个${name}`);
+      } else {
+        this.feedback.speak(`已画${name}`);
+      }
+    }
 
     return true;
   }

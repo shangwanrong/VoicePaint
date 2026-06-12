@@ -29,6 +29,18 @@
   const parser = new CommandParser();
   const recognizer = new VoiceRecognizer();
 
+  // 初始化反馈系统的DOM引用
+  feedback.init({
+    statusBar: {
+      colorPreview: currentColor,
+      colorText: colorText,
+      lineWidth: currentLinewidth,
+      mode: currentMode,
+      position: currentPosition
+    },
+    cursorIndicator: cursorIndicator
+  });
+
   // ===== 光标指示器更新 =====
   function updateCursorIndicator() {
     cursorIndicator.style.left = renderer.cursorX + 'px';

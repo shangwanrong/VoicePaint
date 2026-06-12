@@ -1,0 +1,269 @@
+/* ===== 全局样式 ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: #1a1a2e;
+  color: #e0e0e0;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ===== 顶部标题栏 ===== */
+#header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px;
+  background-color: #16213e;
+  border-bottom: 1px solid #0f3460;
+  flex-shrink: 0;
+  height: 48px;
+}
+
+#header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #e94560;
+  letter-spacing: 1px;
+}
+
+/* 语音状态指示器 */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #aaa;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #666;
+  transition: background-color 0.3s;
+}
+
+.status-indicator.listening .status-dot {
+  background-color: #4caf50;
+  animation: pulse 1.5s infinite;
+}
+
+.status-indicator.error .status-dot {
+  background-color: #f44336;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.2); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* ===== 画布区域 ===== */
+#canvas-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background-color: #ffffff;
+}
+
+#paint-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: none;
+}
+
+/* 画笔光标指示器 */
+.cursor-indicator {
+  position: absolute;
+  pointer-events: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #e94560;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: left 0.15s ease-out, top 0.15s ease-out;
+  z-index: 10;
+  display: none;
+}
+
+.cursor-indicator::before,
+.cursor-indicator::after {
+  content: '';
+  position: absolute;
+  background-color: #e94560;
+}
+
+.cursor-indicator::before {
+  width: 1px;
+  height: 8px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.cursor-indicator::after {
+  width: 8px;
+  height: 1px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* ===== 底部状态栏 ===== */
+#status-bar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 6px 20px;
+  background-color: #16213e;
+  border-top: 1px solid #0f3460;
+  flex-shrink: 0;
+  height: 36px;
+  font-size: 13px;
+}
+
+.status-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-label {
+  color: #888;
+}
+
+.color-preview {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid #555;
+  display: inline-block;
+}
+
+/* ===== 语音识别浮层 ===== */
+.speech-overlay {
+  position: fixed;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.speech-overlay.hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
+  pointer-events: none;
+}
+
+.speech-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: rgba(22, 33, 62, 0.95);
+  border: 1px solid #0f3460;
+  border-radius: 24px;
+  padding: 10px 20px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.speech-icon {
+  color: #4caf50;
+  flex-shrink: 0;
+}
+
+.speech-text {
+  font-size: 15px;
+  color: #e0e0e0;
+  max-width: 400px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== 启动浮层 ===== */
+.start-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(26, 26, 46, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(8px);
+}
+
+.start-overlay.hidden {
+  display: none;
+}
+
+.start-content {
+  text-align: center;
+  color: #e0e0e0;
+}
+
+.start-content h2 {
+  font-size: 42px;
+  color: #e94560;
+  margin-bottom: 8px;
+  letter-spacing: 2px;
+}
+
+.start-content p {
+  font-size: 16px;
+  color: #aaa;
+  margin-bottom: 6px;
+}
+
+.start-hint {
+  margin-top: 30px !important;
+  font-size: 15px !important;
+  color: #ccc !important;
+}
+
+.start-btn {
+  margin-top: 20px;
+  padding: 14px 40px;
+  font-size: 18px;
+  color: #fff;
+  background: linear-gradient(135deg, #e94560, #0f3460);
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  letter-spacing: 1px;
+}
+
+.start-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(233, 69, 96, 0.4);
+}
+
+.start-btn:active {
+  transform: scale(0.98);
+}
+
+.start-note {
+  margin-top: 20px !important;
+  font-size: 12px !important;
+  color: #666 !important;
+}

@@ -106,6 +106,123 @@ class CanvasRenderer {
   }
 
   /**
+   * 更新当前样式
+   */
+  updateStyle(key, value) {
+    if (key in this.currentStyle) {
+      this.currentStyle[key] = value;
+    }
+  }
+
+  /**
+   * 在当前光标位置创建线段
+   */
+  createLineAtCursor(length, direction) {
+    const dir = direction || 'right';
+    const len = length || 100;
+    let x2 = this.cursorX, y2 = this.cursorY;
+    switch (dir) {
+      case 'right': x2 = this.cursorX + len; break;
+      case 'left': x2 = this.cursorX - len; break;
+      case 'up': y2 = this.cursorY - len; break;
+      case 'down': y2 = this.cursorY + len; break;
+    }
+    return ShapeFactory.createShape('line', {
+      x1: this.cursorX, y1: this.cursorY, x2, y2
+    }, this.currentStyle);
+  }
+
+  /**
+   * 在当前光标位置创建矩形
+   */
+  createRectAtCursor(width, height) {
+    return ShapeFactory.createShape('rect', {
+      x: this.cursorX, y: this.cursorY,
+      width: width || 100, height: height || 80
+    }, this.currentStyle);
+  }
+
+  /**
+   * 在当前光标位置创建圆
+   */
+  createCircleAtCursor(radius) {
+    return ShapeFactory.createShape('circle', {
+      x: this.cursorX, y: this.cursorY,
+      radius: radius || 50
+    }, this.currentStyle);
+  }
+
+  /**
+   * 在当前光标位置创建三角形
+   */
+  createTriangleAtCursor(size) {
+    return ShapeFactory.createShape('triangle', {
+      x: this.cursorX, y: this.cursorY,
+      size: size || 80
+    }, this.currentStyle);
+  }
+
+  /**
+   * 在当前光标位置创建椭圆
+   */
+  createEllipseAtCursor(radiusX, radiusY) {
+    return ShapeFactory.createShape('ellipse', {
+      x: this.cursorX, y: this.cursorY,
+      radiusX: radiusX || 60, radiusY: radiusY || 40
+    }, this.currentStyle);
+  }
+
+  /**
+   * 在当前光标位置创建星形
+   */
+  createStarAtCursor(outerRadius, points) {
+    return ShapeFactory.createShape('star', {
+      x: this.cursorX, y: this.cursorY,
+      outerRadius: outerRadius || 50,
+      points: points || 5
+    }, this.currentStyle);
+  }
+
+  /**
+   * 在当前光标位置创建箭头
+   */
+  createArrowAtCursor(length, direction) {
+    const dir = direction || 'right';
+    const len = length || 100;
+    let x2 = this.cursorX, y2 = this.cursorY;
+    switch (dir) {
+      case 'right': x2 = this.cursorX + len; break;
+      case 'left': x2 = this.cursorX - len; break;
+      case 'up': y2 = this.cursorY - len; break;
+      case 'down': y2 = this.cursorY + len; break;
+    }
+    return ShapeFactory.createShape('arrow', {
+      x1: this.cursorX, y1: this.cursorY, x2, y2
+    }, this.currentStyle);
+  }
+
+  /**
+   * 在当前光标位置创建文字
+   */
+  createTextAtCursor(text, fontSize) {
+    return ShapeFactory.createShape('text', {
+      x: this.cursorX, y: this.cursorY,
+      text: text || '文字', fontSize: fontSize || 24
+    }, this.currentStyle);
+  }
+
+  /**
+   * 在指定位置创建图形（通过位置关键词）
+   */
+  moveCursorToPosition(posKey) {
+    const posDesc = POSITION_MAP[posKey];
+    if (posDesc) {
+      const pos = resolvePosition(posDesc, this.canvas.width, this.canvas.height);
+      this.setCursor(pos.x, pos.y);
+    }
+  }
+
+  /**
    * 重绘整个画布
    */
   redraw() {

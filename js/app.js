@@ -111,7 +111,7 @@
       return;
     }
 
-    console.log('解析结果:', command.intent, command.params, '(来源:', command.source || 'rule')');
+    console.log('解析结果:', command.intent, command.params, '(来源:', command.source || 'rule', ')');
 
     // 执行指令
     executor.execute(command);

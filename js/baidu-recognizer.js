@@ -20,7 +20,7 @@ class BaiduRecognizer {
     this.recordStartTime = 0;
 
     // 自动录音循环
-    this.recordDuration = 5000; // 每段录音5秒
+    this.recordDuration = 8000; // 每段录音8秒
     this.recordTimer = null;
   }
 
@@ -143,7 +143,13 @@ class BaiduRecognizer {
           if (this.onResult) this.onResult(text);
         }
       } else if (!result.success) {
-        console.warn('百度ASR识别失败:', result.error, 'err_no:', result.err_no);
+        // 3301 = speech quality error（静音段），属于正常现象，静默处理
+        // 3300 = 参数错误，需要关注
+        if (result.err_no === 3301) {
+          // 静音段，忽略
+        } else if (result.err_no !== 3301) {
+          console.warn('百度ASR识别失败:', result.error, 'err_no:', result.err_no);
+        }
       }
     } catch (e) {
       console.error('发送音频到后端失败:', e);

@@ -81,6 +81,7 @@ app.post('/api/baidu/asr', async (req, res) => {
       format: format || 'pcm',
       rate: rate || 16000,
       channel: channel || 1,
+      cuid: 'voicepaint-web-client',  // 必填：客户端唯一标识
       len: len,  // 原始音频字节长度，非base64长度
       speech: audio,
       token: token

@@ -67,8 +67,14 @@
 
   // ===== 光标指示器更新 =====
   function updateCursorIndicator() {
-    cursorIndicator.style.left = renderer.cursorX + 'px';
-    cursorIndicator.style.top = renderer.cursorY + 'px';
+    // 海龟模式激活时，光标跟随海龟位置
+    if (renderer.turtle.visible) {
+      cursorIndicator.style.left = renderer.turtle.x + 'px';
+      cursorIndicator.style.top = renderer.turtle.y + 'px';
+    } else {
+      cursorIndicator.style.left = renderer.cursorX + 'px';
+      cursorIndicator.style.top = renderer.cursorY + 'px';
+    }
     cursorIndicator.style.display = 'block';
   }
 
@@ -78,7 +84,12 @@
     currentColor.style.backgroundColor = style.strokeColor;
     colorText.textContent = style.strokeColor;
     currentLinewidth.textContent = style.lineWidth;
-    currentMode.textContent = style.fill ? '填充' : '描边';
+    // 海龟模式激活时显示"画笔"模式
+    if (renderer.turtle.visible) {
+      currentMode.textContent = '画笔';
+    } else {
+      currentMode.textContent = style.fill ? '填充' : '描边';
+    }
     currentPosition.textContent = `${Math.round(renderer.cursorX)}, ${Math.round(renderer.cursorY)}`;
   }
 
@@ -114,7 +125,7 @@
     console.log('解析结果:', command.intent, command.params, '(来源:', command.source || 'rule', ')');
 
     // 执行指令
-    executor.execute(command);
+    await executor.execute(command);
 
     // 更新UI
     updateCursorIndicator();

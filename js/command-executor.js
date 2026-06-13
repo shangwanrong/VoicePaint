@@ -71,7 +71,19 @@ class CommandExecutor {
    * 执行绘图指令
    */
   _executeDrawShape(params) {
-    const shape = params.shape || 'circle';
+    // LLM可能返回不同的图形名称，统一映射
+    const shapeAliases = {
+      'square': 'rect', 'rectangle': 'rect', '长方形': 'rect', '正方形': 'rect',
+      '圆形': 'circle', '圆圈': 'circle',
+      '三角形': 'triangle',
+      '线段': 'line', '直线': 'line',
+      '椭圆': 'ellipse',
+      '星形': 'star', '五角星': 'star',
+      '箭头': 'arrow',
+      '文字': 'text'
+    };
+    let shape = params.shape || 'circle';
+    shape = shapeAliases[shape] || shape;
     const count = params.count || 1;
 
     // 如果指定了位置，先移动光标

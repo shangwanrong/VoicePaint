@@ -39,6 +39,9 @@ class ShapeFactory {
       case 'text':
         ShapeFactory.drawText(ctx, shape.params, shape.style.fill);
         break;
+      case 'svg':
+        // SVG 渲染由 CanvasRenderer 异步处理，这里不执行同步绘制
+        break;
       default:
         console.warn('未知图形类型:', shape.type);
     }
@@ -161,6 +164,58 @@ class ShapeFactory {
     } else {
       ctx.strokeText(text, x, y);
     }
+  }
+
+  /**
+   * 异步渲染SVG图形到Canvas
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {object} shape - SVG图形对象
+   * @returns {Promise<void>}
+   */
+  static async drawSVG(ctx, shape) {
+    const { svgData, x, y, scale } = shape.params;
+    const s = scale || 1;
+
+    return new Promise((resolve, reject) => {
+      // 使用 DOMParser 解析 SVG 字符串
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svgData, 'image/svg+xml');
+      const svgElement = doc.querySelector('svg');
+
+      if (!svgElement) {
+        console.warn('SVG 解析失败，未找到 svg 元素');
+        resolve();
+        return;
+      }
+
+      // 确保 SVG 有 xmlns 属性
+      if (!svgElement.getAttribute('xmlns')) {
+        svgElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      }
+
+      // 序列化 SVG 并创建 Blob URL
+      const svgString = new XMLSerializer().serializeToString(svgElement);
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      const img = new Image();
+      img.onload = () => {
+        // 计算绘制尺寸（viewBox 为 200x200，缩放到合适大小）
+        const drawSize = 100 * s;
+        ctx.save();
+        ctx.globalAlpha = shape.style.opacity || 1;
+        ctx.drawImage(img, x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
+        ctx.restore();
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.onerror = () => {
+        console.warn('SVG 图片加载失败');
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.src = url;
+    });
   }
 
   /**

@@ -22,7 +22,17 @@ class CommandParser {
       cancel: ['取消', '算了', '不要了'],
       pause: ['暂停', '停止识别'],
       resume: ['继续', '恢复识别'],
-      draw_preset: ['树', '房子', '太阳', '花', '人脸', '笑脸', '心', '爱心']
+      draw_preset: ['树', '房子', '太阳', '花', '人脸', '笑脸', '心', '爱心', '猫', '小猫', '猫咪', '狗', '小狗', '狗狗', '鱼', '小鱼', '蝴蝶', '鸟', '小鸟', '兔子', '小兔', '兔', '熊', '小熊', '熊猫', '企鹅', '青蛙', '蛙'],
+      draw_svg: ['龙', '马', '牛', '羊', '猪', '鸡', '蛇', '鼠', '虎', '猴', '汽车', '飞机', '船', '火箭', '山', '河', '云', '彩虹', '月亮', '钟表', '雨伞', '气球', '雪花'],
+      turtle_start: ['开始画', '画笔模式', '开始绘制', '落笔模式'],
+      turtle_stop: ['停止画', '结束画', '退出画笔', '停止绘制'],
+      turtle_forward: ['向前', '前进', '往前'],
+      turtle_backward: ['向后', '后退', '往后'],
+      turtle_turn_left: ['左转', '向左转', '转弯左'],
+      turtle_turn_right: ['右转', '向右转', '转弯右'],
+      turtle_pen_up: ['抬笔', '提笔', '停笔'],
+      turtle_pen_down: ['落笔', '下笔', '开始画线'],
+      turtle_arc: ['弧线', '画弧', '圆弧']
     };
 
     // 图形类型关键词
@@ -123,8 +133,10 @@ class CommandParser {
     const priorityOrder = [
       'undo', 'redo', 'clear', 'save', 'help', 'cancel', 'pause', 'resume',
       'set_fill', 'set_dash', 'set_opacity', 'set_linewidth',
+      'turtle_start', 'turtle_stop', 'turtle_forward', 'turtle_backward',
+      'turtle_turn_left', 'turtle_turn_right', 'turtle_pen_up', 'turtle_pen_down', 'turtle_arc',
       'draw_direction', 'move_to', 'set_background', 'delete_last',
-      'set_color', 'draw_shape'
+      'set_color', 'draw_svg', 'draw_shape'
     ];
 
     for (const intent of priorityOrder) {
@@ -191,6 +203,8 @@ class CommandParser {
         return this._extractDrawShapeParams(text);
       case 'draw_preset':
         return this._extractPresetParams(text);
+      case 'draw_svg':
+        return { description: text };
       case 'set_color':
         return this._extractColorParams(text);
       case 'set_linewidth':
@@ -207,6 +221,21 @@ class CommandParser {
         return this._extractDirectionParams(text);
       case 'set_background':
         return this._extractBackgroundParams(text);
+      case 'turtle_start':
+      case 'turtle_stop':
+      case 'turtle_pen_up':
+      case 'turtle_pen_down':
+        return {};
+      case 'turtle_forward':
+        return this._extractTurtleForwardParams(text);
+      case 'turtle_backward':
+        return this._extractTurtleBackwardParams(text);
+      case 'turtle_turn_left':
+        return this._extractTurtleTurnLeftParams(text);
+      case 'turtle_turn_right':
+        return this._extractTurtleTurnRightParams(text);
+      case 'turtle_arc':
+        return this._extractTurtleArcParams(text);
       case 'delete_last':
         return {};
       case 'undo':
@@ -570,7 +599,17 @@ class CommandParser {
     const presetMap = {
       '树': 'tree', '房子': 'house', '太阳': 'sun',
       '花': 'flower', '人脸': 'face', '笑脸': 'smiley',
-      '心': 'heart', '爱心': 'heart'
+      '心': 'heart', '爱心': 'heart',
+      '猫': 'cat', '小猫': 'cat', '猫咪': 'cat',
+      '狗': 'dog', '小狗': 'dog', '狗狗': 'dog',
+      '鱼': 'fish', '小鱼': 'fish',
+      '蝴蝶': 'butterfly',
+      '鸟': 'bird', '小鸟': 'bird',
+      '兔子': 'rabbit', '小兔': 'rabbit', '兔': 'rabbit',
+      '熊': 'bear', '小熊': 'bear',
+      '熊猫': 'panda',
+      '企鹅': 'penguin',
+      '青蛙': 'frog', '蛙': 'frog'
     };
     let preset = null;
     for (const [keyword, name] of Object.entries(presetMap)) {
@@ -582,5 +621,53 @@ class CommandParser {
     const position = this._extractPosition(text);
     const color = this._extractColor(text);
     return { preset: preset || 'tree', position, color };
+  }
+
+  // ===== 海龟画图参数提取方法 =====
+
+  /**
+   * 提取海龟前进参数
+   */
+  _extractTurtleForwardParams(text) {
+    const distance = this._extractPrefixedNumber(text, ['前进', '向前', '往前', '走', '移动']) ||
+                     this._extractSizeNumber(text) || 50;
+    return { distance };
+  }
+
+  /**
+   * 提取海龟后退参数
+   */
+  _extractTurtleBackwardParams(text) {
+    const distance = this._extractPrefixedNumber(text, ['后退', '向后', '往后', '退', '移动']) ||
+                     this._extractSizeNumber(text) || 50;
+    return { distance };
+  }
+
+  /**
+   * 提取海龟左转参数
+   */
+  _extractTurtleTurnLeftParams(text) {
+    const degrees = this._extractPrefixedNumber(text, ['左转', '转']) ||
+                    this._extractSizeNumber(text) || 90;
+    return { degrees };
+  }
+
+  /**
+   * 提取海龟右转参数
+   */
+  _extractTurtleTurnRightParams(text) {
+    const degrees = this._extractPrefixedNumber(text, ['右转', '转']) ||
+                    this._extractSizeNumber(text) || 90;
+    return { degrees };
+  }
+
+  /**
+   * 提取海龟弧线参数
+   */
+  _extractTurtleArcParams(text) {
+    const radius = this._extractPrefixedNumber(text, ['半径', '弧线', '画弧', '圆弧']) ||
+                   this._extractSizeNumber(text) || 50;
+    const angle = this._extractPrefixedNumber(text, ['角度', '度']) || 90;
+    return { radius, angle };
   }
 }

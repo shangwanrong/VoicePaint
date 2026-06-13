@@ -1,19 +1,28 @@
 // VoicePaint 后端代理服务器
 // 保护 API 密钥不在前端暴露
 
+require('dotenv').config();
+
 const express = require('express');
 const path = require('path');
 const https = require('https');
 const http = require('http');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// ===== API 密钥（仅存储在服务端） =====
-const BAIDU_API_KEY = 'REDACTED_BAIDU_API_KEY';
-const BAIDU_SECRET_KEY = 'REDACTED_BAIDU_SECRET_KEY';
-const DEEPSEEK_API_KEY = 'REDACTED_DEEPSEEK_API_KEY';
-const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
+// ===== API 密钥（从环境变量读取，不硬编码） =====
+const BAIDU_API_KEY = process.env.BAIDU_API_KEY;
+const BAIDU_SECRET_KEY = process.env.BAIDU_SECRET_KEY;
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
+
+// 启动时检查必要的环境变量
+if (!BAIDU_API_KEY || !BAIDU_SECRET_KEY || !DEEPSEEK_API_KEY) {
+  console.error('错误：缺少必要的环境变量，请检查 .env 文件');
+  console.error('需要：BAIDU_API_KEY, BAIDU_SECRET_KEY, DEEPSEEK_API_KEY');
+  process.exit(1);
+}
 
 // ===== 百度 Access Token 缓存 =====
 let baiduToken = '';

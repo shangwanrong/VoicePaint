@@ -41,11 +41,14 @@
   const history = new ActionHistory();
   const feedback = new FeedbackSystem();
   const executor = new CommandExecutor(renderer, history, feedback);
-  const parser = new CommandParser();
+  const ruleParser = new CommandParser();  // 规则引擎（回退）
+  const llmParser = new LLMParser();       // DeepSeek 大模型（优先）
+  llmParser.setFallback(ruleParser);        // 大模型失败时回退到规则引擎
 
-  // 语音识别器：优先讯飞，回退浏览器原生
-  const xfyunRecognizer = new XfyunRecognizer();
-  const browserRecognizer = new VoiceRecognizer();
+  // 语音识别器
+  const baiduRecognizer = new BaiduRecognizer();  // 百度语音（优先）
+  const xfyunRecognizer = new XfyunRecognizer();  // 讯飞语音（备选）
+  const browserRecognizer = new VoiceRecognizer(); // 浏览器原生（备选）
 
   // 当前使用的识别器
   let activeRecognizer = null;
@@ -97,15 +100,18 @@
   }
 
   // ===== 处理指令文本（语音或文字输入共用） =====
-  function handleCommand(text) {
+  async function handleCommand(text) {
     showSpeechText(text);
 
-    const command = parser.parse(text);
+    // 优先使用大模型解析，失败回退规则引擎
+    const command = await llmParser.parse(text);
     if (!command) {
       console.log('未能解析指令:', text);
       if (inputMode === 'text') textCommandInput.value = '';
       return;
     }
+
+    console.log('解析结果:', command.intent, command.params, '(来源:', command.source || 'rule')');
 
     // 执行指令
     executor.execute(command);
@@ -134,6 +140,16 @@
     };
   }
 
+  // 百度识别器回调
+  setupRecognizerCallbacks(baiduRecognizer);
+  baiduRecognizer.onError = (error) => {
+    if (error === 'not_allowed') {
+      switchToTextMode('麦克风权限被拒绝，已切换到文字模式');
+    } else if (error === 'start_failed') {
+      switchToTextMode('语音识别启动失败，已切换到文字模式');
+    }
+  };
+
   // 讯飞识别器回调
   setupRecognizerCallbacks(xfyunRecognizer);
   xfyunRecognizer.onError = (error) => {
@@ -154,23 +170,11 @@
   let browserNetworkErrors = 0;
   browserRecognizer.onError = (error) => {
     if (error === 'not_supported' || error === 'not_allowed') {
-      // 回退到讯飞
-      if (xfyunRecognizer.isConfigured()) {
-        activeRecognizer = xfyunRecognizer;
-        xfyunRecognizer.start();
-      } else {
-        showXfyunSettings();
-      }
+      switchToTextMode('浏览器不支持语音识别，已切换到文字模式');
     } else if (error === 'network') {
       browserNetworkErrors++;
       if (browserNetworkErrors >= 2) {
-        if (xfyunRecognizer.isConfigured()) {
-          browserRecognizer.stop();
-          activeRecognizer = xfyunRecognizer;
-          xfyunRecognizer.start();
-        } else {
-          switchToTextMode('语音识别网络不可用，已切换到文字模式');
-        }
+        switchToTextMode('语音识别网络不可用，已切换到文字模式');
       }
     }
   };
@@ -190,7 +194,6 @@
   // ===== 显示讯飞配置面板 =====
   function showXfyunSettings() {
     xfyunSettings.classList.remove('hidden');
-    // 填充已保存的值
     xfyunAppId.value = xfyunRecognizer.appId;
     xfyunApiKey.value = xfyunRecognizer.apiKey;
     xfyunApiSecret.value = xfyunRecognizer.apiSecret;
@@ -211,7 +214,6 @@
     xfyunSettings.classList.add('hidden');
     startOverlay.classList.add('hidden');
 
-    // 启动讯飞识别
     inputMode = 'voice';
     activeRecognizer = xfyunRecognizer;
     updateCursorIndicator();
@@ -221,7 +223,6 @@
 
   xfyunCancelBtn.addEventListener('click', () => {
     xfyunSettings.classList.add('hidden');
-    // 回退到文字模式
     startOverlay.classList.add('hidden');
     switchToTextMode('未配置讯飞密钥，已切换到文字模式');
   });
@@ -233,14 +234,9 @@
     updateCursorIndicator();
     updateStatusBar();
 
-    // 优先使用讯飞
-    if (xfyunRecognizer.isConfigured()) {
-      activeRecognizer = xfyunRecognizer;
-      xfyunRecognizer.start();
-    } else {
-      // 显示讯飞配置面板
-      showXfyunSettings();
-    }
+    // 优先使用百度语音识别（通过后端代理，密钥安全）
+    activeRecognizer = baiduRecognizer;
+    baiduRecognizer.start();
   });
 
   // ===== 启动按钮 - 文字模式 =====
@@ -273,8 +269,8 @@
 
   // ===== 暴露到全局供调试 =====
   window.__voicePaint = {
-    renderer, history, parser, executor, feedback,
-    xfyunRecognizer, browserRecognizer,
+    renderer, history, ruleParser, llmParser, executor, feedback,
+    baiduRecognizer, xfyunRecognizer, browserRecognizer,
     updateCursorIndicator, updateStatusBar, showSpeechText, handleCommand,
     switchToTextMode
   };

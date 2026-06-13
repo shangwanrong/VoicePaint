@@ -30,7 +30,7 @@ class CommandParser {
       turtle_backward: ['向后', '后退', '往后'],
       turtle_turn_left: ['左转', '向左转', '转弯左'],
       turtle_turn_right: ['右转', '向右转', '转弯右'],
-      turtle_pen_up: ['抬笔', '提笔', '停笔'],
+      turtle_pen_up: ['抬笔', '提笔', '停笔', '台笔', '台比', '太笔'],
       turtle_pen_down: ['落笔', '下笔', '开始画线'],
       turtle_arc: ['弧线', '画弧', '圆弧']
     };

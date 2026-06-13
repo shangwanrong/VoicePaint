@@ -389,9 +389,15 @@ class CanvasRenderer {
     ctx.translate(t.x, t.y);
     ctx.rotate(rad);
 
-    // 绘制三角形箭头，指向右方（0度方向）
-    ctx.fillStyle = '#00CC00';
-    ctx.strokeStyle = '#006600';
+    // 抬笔时用灰色虚线，落笔时用绿色实线
+    if (t.penDown) {
+      ctx.fillStyle = '#00CC00';
+      ctx.strokeStyle = '#006600';
+    } else {
+      ctx.fillStyle = '#999999';
+      ctx.strokeStyle = '#666666';
+      ctx.setLineDash([3, 3]);
+    }
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(size, 0);           // 尖端
@@ -493,6 +499,7 @@ class CanvasRenderer {
    */
   turtlePenUp() {
     this.turtle.penDown = false;
+    this.redraw();
   }
 
   /**
@@ -500,6 +507,7 @@ class CanvasRenderer {
    */
   turtlePenDown() {
     this.turtle.penDown = true;
+    this.redraw();
   }
 
   /**

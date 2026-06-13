@@ -175,7 +175,7 @@ app.post('/api/deepseek/chat', async (req, res) => {
 - turtle_backward: 画笔后退。params: { distance: 数字 }
 - turtle_turn_left: 画笔左转。params: { degrees: 数字 }
 - turtle_turn_right: 画笔右转。params: { degrees: 数字 }
-- turtle_pen_up: 抬笔（移动不画线）。params: {}
+- turtle_pen_up: 抬笔/提笔/台笔（移动不画线）。params: {}
 - turtle_pen_down: 落笔（移动画线）。params: {}
 - turtle_arc: 画弧线。params: { radius: 数字, angle: 角度数字 }
 
@@ -186,7 +186,8 @@ app.post('/api/deepseek/chat', async (req, res) => {
 判断规则：
 1. 画笔模式指令：当用户说"开始画"、"向前"、"左转"等画笔操作时，使用对应的 turtle_xxx 意图。这些指令与 draw_shape 不同，draw_shape 是一次性绘制完整图形，turtle 是逐步控制画笔。
 2. 预设模板优先：如果用户要求画的内容在 draw_preset 的 preset 列表中（猫cat、狗dog、鱼fish、蝴蝶butterfly、鸟bird、兔子rabbit、熊bear、熊猫panda、企鹅penguin、青蛙frog、树tree、房子house、太阳sun、花flower、笑脸smiley、爱心heart），必须使用 draw_preset 意图。
-3. AI生成SVG：只有当用户要求画的内容不在预设模板列表中（如龙、马、汽车、飞机、火箭等），才使用 draw_svg 意图。`;
+3. AI生成SVG：只有当用户要求画的内容不在预设模板列表中（如龙、马、汽车、飞机、火箭等），才使用 draw_svg 意图。
+4. 移动vs画线区分：当用户说"移到"、"移动"、"走到"等只想改变位置不画线的指令时，必须使用 move_to 意图。只有当用户明确说"画线"、"向上画"、"向左画"等带"画"字的指令时，才使用 draw_shape + direction 画线。`;
 
     const postData = JSON.stringify({
       model: 'deepseek-chat',

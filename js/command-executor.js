@@ -311,6 +311,10 @@ class CommandExecutor {
    * 执行移动指令
    */
   _executeMoveTo(params) {
+    // 海龟模式激活时，移动海龟而非普通光标
+    if (this.renderer.turtle.visible) {
+      return this._executeTurtleMoveTo(params);
+    }
     if (params.position) {
       this.renderer.moveCursorToPosition(params.position);
       if (this.feedback) this.feedback.speak(`已移到${params.position}`);
@@ -335,13 +339,79 @@ class CommandExecutor {
   }
 
   /**
+   * 海龟模式下的移动
+   */
+  _executeTurtleMoveTo(params) {
+    const t = this.renderer.turtle;
+    if (params.position) {
+      // 移到预设位置
+      const pos = resolvePosition(params.position, this.renderer.width, this.renderer.height);
+      const oldX = t.x, oldY = t.y;
+      t.x = pos.x; t.y = pos.y;
+      if (t.penDown) {
+        t.paths.push({ type: 'segment', x1: oldX, y1: oldY, x2: t.x, y2: t.y, style: { ...this.renderer.currentStyle } });
+      }
+      this.renderer.redraw();
+      if (this.feedback) this.feedback.speak(`已移到${params.position}`);
+    } else if (params.direction) {
+      // 按方向移动
+      const dist = params.distance || 50;
+      const oldAngle = t.angle;
+      switch (params.direction) {
+        case 'up': t.angle = -90; break;
+        case 'down': t.angle = 90; break;
+        case 'left': t.angle = 180; break;
+        case 'right': t.angle = 0; break;
+      }
+      const rad = t.angle * Math.PI / 180;
+      const oldX = t.x, oldY = t.y;
+      t.x = oldX + dist * Math.cos(rad);
+      t.y = oldY + dist * Math.sin(rad);
+      if (t.penDown) {
+        t.paths.push({ type: 'segment', x1: oldX, y1: oldY, x2: t.x, y2: t.y, style: { ...this.renderer.currentStyle } });
+      }
+      t.angle = oldAngle; // 恢复原来的朝向
+      this.renderer.redraw();
+      const dirNames = { up: '上', down: '下', left: '左', right: '右' };
+      const penState = t.penDown ? '画线' : '移动';
+      if (this.feedback) this.feedback.speak(`向${dirNames[params.direction]}${penState}${dist}`);
+    }
+    return true;
+  }
+
+  /**
    * 执行方向绘图指令
    */
   _executeDrawDirection(params) {
     const direction = params.direction || 'right';
     const distance = params.distance || 100;
 
-    // 在指定方向画线
+    // 海龟模式激活时，用海龟画方向线
+    if (this.renderer.turtle.visible) {
+      const t = this.renderer.turtle;
+      const oldAngle = t.angle;
+      switch (direction) {
+        case 'up': t.angle = -90; break;
+        case 'down': t.angle = 90; break;
+        case 'left': t.angle = 180; break;
+        case 'right': t.angle = 0; break;
+      }
+      const rad = t.angle * Math.PI / 180;
+      const oldX = t.x, oldY = t.y;
+      t.x = oldX + distance * Math.cos(rad);
+      t.y = oldY + distance * Math.sin(rad);
+      if (t.penDown) {
+        t.paths.push({ type: 'segment', x1: oldX, y1: oldY, x2: t.x, y2: t.y, style: { ...this.renderer.currentStyle } });
+      }
+      t.angle = oldAngle;
+      this.renderer.redraw();
+      const dirNames = { up: '上', down: '下', left: '左', right: '右' };
+      const penState = t.penDown ? '画线' : '移动';
+      if (this.feedback) this.feedback.speak(`向${dirNames[direction]}${penState}${distance}`);
+      return true;
+    }
+
+    // 非海龟模式：在指定方向画线
     const shapeObj = this.renderer.createLineAtCursor(distance, direction);
     this.renderer.addShape(shapeObj);
 
@@ -1142,7 +1212,8 @@ class CommandExecutor {
   _executeTurtleForward(params) {
     const distance = params.distance || 50;
     this.renderer.turtleForward(distance);
-    if (this.feedback) this.feedback.speak(`前进${distance}`);
+    const penState = this.renderer.turtle.penDown ? '画线' : '移动';
+    if (this.feedback) this.feedback.speak(`${penState}${distance}`);
     return true;
   }
 
@@ -1152,7 +1223,8 @@ class CommandExecutor {
   _executeTurtleBackward(params) {
     const distance = params.distance || 50;
     this.renderer.turtleBackward(distance);
-    if (this.feedback) this.feedback.speak(`后退${distance}`);
+    const penState = this.renderer.turtle.penDown ? '画线' : '移动';
+    if (this.feedback) this.feedback.speak(`后退${penState}${distance}`);
     return true;
   }
 
@@ -1181,7 +1253,7 @@ class CommandExecutor {
    */
   _executeTurtlePenUp(params) {
     this.renderer.turtlePenUp();
-    if (this.feedback) this.feedback.speak('抬笔');
+    if (this.feedback) this.feedback.speak('抬笔，移动时不画线');
     return true;
   }
 
@@ -1190,7 +1262,7 @@ class CommandExecutor {
    */
   _executeTurtlePenDown(params) {
     this.renderer.turtlePenDown();
-    if (this.feedback) this.feedback.speak('落笔');
+    if (this.feedback) this.feedback.speak('落笔，移动时画线');
     return true;
   }
 

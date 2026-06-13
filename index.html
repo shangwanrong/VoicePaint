@@ -59,49 +59,24 @@
       </div>
     </div>
 
-    <!-- 文字输入回退（语音不可用时显示） -->
-    <div id="text-input-bar" class="text-input-bar hidden">
-      <input type="text" id="text-command-input" placeholder="输入指令，如：画一个红色的圆" autocomplete="off" />
-      <button id="text-command-send" class="text-send-btn">发送</button>
+    <!-- 录音按钮 -->
+    <div id="record-btn" class="record-btn" title="点击开始录音，再次点击停止录音">
+      <svg id="mic-icon" viewBox="0 0 24 24" width="28" height="28">
+        <path fill="currentColor" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+        <path fill="currentColor" d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+      </svg>
+      <svg id="stop-icon" viewBox="0 0 24 24" width="28" height="28" style="display:none">
+        <rect fill="currentColor" x="6" y="6" width="12" height="12" rx="2"/>
+      </svg>
     </div>
 
-    <!-- 启动按钮（首次需要用户交互才能启动语音识别） -->
+    <!-- 启动页面 -->
     <div id="start-overlay" class="start-overlay">
       <div class="start-content">
         <h2>VoicePaint</h2>
         <p>AI 语音绘图工具</p>
-        <p class="start-hint">选择输入模式启动</p>
-        <div class="start-buttons">
-          <button id="start-voice-btn" class="start-btn">语音模式</button>
-          <button id="start-text-btn" class="start-btn start-btn-secondary">文字模式</button>
-        </div>
-        <p class="start-note">语音模式使用讯飞语音听写（需配置API密钥）<br>文字模式无需麦克风，手动输入指令</p>
-      </div>
-    </div>
-
-    <!-- 讯飞配置面板 -->
-    <div id="xfyun-settings" class="settings-overlay hidden">
-      <div class="settings-content">
-        <h3>讯飞语音听写配置</h3>
-        <p class="settings-desc">请前往 <a href="https://www.xfyun.cn/services/voicedictation" target="_blank">讯飞开放平台</a> 注册并创建"语音听写"应用，获取以下密钥（免费额度每天500次）</p>
-        <div class="settings-form">
-          <div class="form-group">
-            <label for="xfyun-appid">APPID</label>
-            <input type="text" id="xfyun-appid" placeholder="如: 5a123456" />
-          </div>
-          <div class="form-group">
-            <label for="xfyun-apikey">APIKey</label>
-            <input type="text" id="xfyun-apikey" placeholder="如: a1b2c3d4e5f6..." />
-          </div>
-          <div class="form-group">
-            <label for="xfyun-apisecret">APISecret</label>
-            <input type="text" id="xfyun-apisecret" placeholder="如: 1a2b3c4d5e6f..." />
-          </div>
-        </div>
-        <div class="settings-actions">
-          <button id="xfyun-save-btn" class="start-btn">保存并启动</button>
-          <button id="xfyun-cancel-btn" class="start-btn start-btn-secondary">取消</button>
-        </div>
+        <p class="start-hint">点击下方按钮启动语音模式</p>
+        <button id="start-voice-btn" class="start-btn">启动语音模式</button>
       </div>
     </div>
   </div>

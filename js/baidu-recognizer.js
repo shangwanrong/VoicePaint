@@ -1,5 +1,5 @@
 // 百度语音识别前端模块
-// 录音 → PCM编码 → 发送到后端代理 → 获取识别文字
+// 点击按钮开始录音 → 点击按钮停止录音 → 发送音频到后端代理 → 获取识别文字
 
 class BaiduRecognizer {
   constructor() {
@@ -17,21 +17,13 @@ class BaiduRecognizer {
 
     // 录音缓冲
     this.audioChunks = [];
-    this.recordStartTime = 0;
-
-    // 自动录音循环
-    this.recordDuration = 8000; // 每段录音8秒
-    this.recordTimer = null;
   }
 
   /**
-   * 开始语音识别
+   * 初始化麦克风（启动时调用一次）
    */
-  async start() {
-    if (this.isListening) return;
-
+  async init() {
     try {
-      // 获取麦克风
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
@@ -41,18 +33,15 @@ class BaiduRecognizer {
         }
       });
 
-      // 创建 AudioContext
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
       const source = this.audioContext.createMediaStreamSource(this.mediaStream);
 
-      // ScriptProcessorNode 捕获原始 PCM
       this.processor = source.context.createScriptProcessor(4096, 1, 1);
       this.audioChunks = [];
 
       this.processor.onaudioprocess = (e) => {
         if (!this.isRecording) return;
         const pcmData = e.inputBuffer.getChannelData(0);
-        // Float32 → Int16
         const int16Data = new Int16Array(pcmData.length);
         for (let i = 0; i < pcmData.length; i++) {
           const s = Math.max(-1, Math.min(1, pcmData[i]));
@@ -65,33 +54,38 @@ class BaiduRecognizer {
       this.processor.connect(this.audioContext.destination);
 
       this.isListening = true;
-      if (this.onStatusChange) this.onStatusChange('listening');
-
-      // 开始录音循环
-      this._startRecordLoop();
-
+      return true;
     } catch (e) {
-      console.error('百度语音识别启动失败:', e);
+      console.error('百度语音识别初始化失败:', e);
       this._cleanup();
       if (e.name === 'NotAllowedError') {
         if (this.onError) this.onError('not_allowed');
       } else {
         if (this.onError) this.onError('start_failed');
       }
+      return false;
     }
   }
 
   /**
-   * 录音循环：每5秒发送一次
+   * 开始录音（点击录音按钮时调用）
    */
-  _startRecordLoop() {
-    this.isRecording = true;
+  startRecording() {
+    if (!this.isListening) return;
     this.audioChunks = [];
-    this.recordStartTime = Date.now();
+    this.isRecording = true;
+    if (this.onStatusChange) this.onStatusChange('listening');
+  }
 
-    this.recordTimer = setInterval(() => {
-      this._sendAudio();
-    }, this.recordDuration);
+  /**
+   * 停止录音并发送识别（点击停止按钮时调用）
+   */
+  stopRecording() {
+    if (!this.isRecording) return;
+    this.isRecording = false;
+    if (this.onStatusChange) this.onStatusChange('stopped');
+    // 发送录音数据
+    this._sendAudio();
   }
 
   /**
@@ -128,7 +122,7 @@ class BaiduRecognizer {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           audio: base64Audio,
-          len: merged.buffer.byteLength,  // 原始音频字节长度
+          len: merged.buffer.byteLength,
           format: 'pcm',
           rate: 16000,
           channel: 1
@@ -143,11 +137,9 @@ class BaiduRecognizer {
           if (this.onResult) this.onResult(text);
         }
       } else if (!result.success) {
-        // 3301 = speech quality error（静音段），属于正常现象，静默处理
-        // 3300 = 参数错误，需要关注
         if (result.err_no === 3301) {
           // 静音段，忽略
-        } else if (result.err_no !== 3301) {
+        } else {
           console.warn('百度ASR识别失败:', result.error, 'err_no:', result.err_no);
         }
       }
@@ -168,29 +160,13 @@ class BaiduRecognizer {
   }
 
   /**
-   * 停止语音识别
+   * 停止语音识别（完全关闭）
    */
   stop() {
     this.isListening = false;
     this.isRecording = false;
-
-    // 发送最后一段音频
-    if (this.audioChunks.length > 0) {
-      this._sendAudio();
-    }
-
-    clearInterval(this.recordTimer);
     this._cleanup();
     if (this.onStatusChange) this.onStatusChange('stopped');
-  }
-
-  /**
-   * 暂停
-   */
-  pause() {
-    this.isRecording = false;
-    clearInterval(this.recordTimer);
-    if (this.onStatusChange) this.onStatusChange('paused');
   }
 
   /**

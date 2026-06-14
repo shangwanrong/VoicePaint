@@ -1,19 +1,28 @@
 // VoicePaint 后端代理服务器
 // 保护 API 密钥不在前端暴露
 
+require('dotenv').config();
+
 const express = require('express');
 const path = require('path');
 const https = require('https');
 const http = require('http');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// ===== API 密钥（仅存储在服务端） =====
-const BAIDU_API_KEY = 'REDACTED_BAIDU_API_KEY';
-const BAIDU_SECRET_KEY = 'REDACTED_BAIDU_SECRET_KEY';
-const DEEPSEEK_API_KEY = 'REDACTED_DEEPSEEK_API_KEY';
-const DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
+// ===== API 密钥（从环境变量读取，不硬编码） =====
+const BAIDU_API_KEY = process.env.BAIDU_API_KEY;
+const BAIDU_SECRET_KEY = process.env.BAIDU_SECRET_KEY;
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
+
+// 启动时检查必要的环境变量
+if (!BAIDU_API_KEY || !BAIDU_SECRET_KEY || !DEEPSEEK_API_KEY) {
+  console.error('错误：缺少必要的环境变量，请检查 .env 文件');
+  console.error('需要：BAIDU_API_KEY, BAIDU_SECRET_KEY, DEEPSEEK_API_KEY');
+  process.exit(1);
+}
 
 // ===== 百度 Access Token 缓存 =====
 let baiduToken = '';
@@ -144,7 +153,8 @@ app.post('/api/deepseek/chat', async (req, res) => {
 
 可用意图和参数：
 - draw_shape: 绘制图形。params: { shape: "circle"|"rect"|"line"|"triangle"|"ellipse"|"star"|"arrow"|"text", color: "#RRGGBB"或null, size: 数字或null, width: 数字或null, height: 数字或null, position: "中间"|"左上"|"右上"|"左下"|"右下"|"左边"|"右边"|"上面"|"下面"或null, direction: "up"|"down"|"left"|"right"或null, fill: true|false或null, count: 数字或null, text: "文字内容"或null, points: 数字或null }
-- draw_preset: 预设模板。params: { preset: "tree"|"house"|"sun"|"flower"|"smiley"|"heart", position: 位置或null, color: 颜色或null }
+- draw_preset: 预设模板。params: { preset: "tree"|"house"|"sun"|"flower"|"smiley"|"heart"|"cat"|"dog"|"fish"|"butterfly"|"bird"|"rabbit"|"bear"|"panda"|"penguin"|"frog", position: 位置或null, color: 颜色或null }
+- draw_svg: AI生成SVG图形（用于复杂图形如动物、风景等）。params: { description: "用户描述", position: 位置或null, color: 颜色或null, scale: 数字或null }
 - set_color: 设置颜色。params: { color: "#RRGGBB" }
 - set_linewidth: 设置线宽。params: { value: 数字 } 或 { delta: 正负数字 }
 - set_fill: 设置填充模式。params: { fill: true|false }
@@ -159,10 +169,25 @@ app.post('/api/deepseek/chat', async (req, res) => {
 - set_background: 设置背景色。params: { color: "#RRGGBB" }
 - help: 帮助。params: {}
 - cancel: 取消。params: {}
+- turtle_start: 启动画笔模式。params: {}
+- turtle_stop: 停止画笔模式。params: {}
+- turtle_forward: 画笔前进。params: { distance: 数字 }
+- turtle_backward: 画笔后退。params: { distance: 数字 }
+- turtle_turn_left: 画笔左转。params: { degrees: 数字 }
+- turtle_turn_right: 画笔右转。params: { degrees: 数字 }
+- turtle_pen_up: 抬笔/提笔/台笔/排比/台币/太笔（移动不画线，这些是语音识别的同音词）。params: {}
+- turtle_pen_down: 落笔（移动画线）。params: {}
+- turtle_arc: 画弧线。params: { radius: 数字, angle: 角度数字 }
 
 颜色映射：红→#FF0000, 蓝→#0000FF, 绿→#00FF00, 黄→#FFFF00, 黑→#000000, 白→#FFFFFF, 橙→#FFA500, 紫→#800080, 粉→#FFC0CB, 灰→#808080, 棕→#8B4513, 青→#00FFFF, 金色→#FFD700, 银色→#C0C0C0
 
-只输出JSON，不要输出其他内容。如果无法识别意图，输出 {"intent":"unknown","params":{}}`;
+只输出JSON，不要输出其他内容。如果无法识别意图，输出 {"intent":"unknown","params":{}}
+
+判断规则：
+1. 画笔模式指令：当用户说"开始画"、"向前"、"左转"等画笔操作时，使用对应的 turtle_xxx 意图。这些指令与 draw_shape 不同，draw_shape 是一次性绘制完整图形，turtle 是逐步控制画笔。
+2. 预设模板优先：如果用户要求画的内容在 draw_preset 的 preset 列表中（猫cat、狗dog、鱼fish、蝴蝶butterfly、鸟bird、兔子rabbit、熊bear、熊猫panda、企鹅penguin、青蛙frog、树tree、房子house、太阳sun、花flower、笑脸smiley、爱心heart），必须使用 draw_preset 意图。
+3. AI生成SVG：只有当用户要求画的内容不在预设模板列表中（如龙、马、汽车、飞机、火箭等），才使用 draw_svg 意图。
+4. 移动vs画线区分：当用户说"移到"、"移动"、"走到"等只想改变位置不画线的指令时，必须使用 move_to 意图。只有当用户明确说"画线"、"向上画"、"向左画"等带"画"字的指令时，才使用 draw_shape + direction 画线。`;
 
     const postData = JSON.stringify({
       model: 'deepseek-chat',
@@ -223,6 +248,89 @@ app.post('/api/deepseek/chat', async (req, res) => {
 
   } catch (e) {
     console.error('DeepSeek代理错误:', e.message);
+    res.json({ success: false, error: e.message });
+  }
+});
+
+// ===== 代理：DeepSeek SVG 生成 =====
+app.post('/api/deepseek/svg', async (req, res) => {
+  try {
+    const { text } = req.body;
+
+    if (!text) {
+      return res.json({ success: false, error: '缺少文本' });
+    }
+
+    const systemPrompt = `你是一个SVG图形生成助手。根据用户的描述生成SVG代码。
+
+要求：
+1. 生成一个完整的SVG字符串，viewBox="0 0 200 200"
+2. 只使用 path、circle、rect、ellipse、line、polygon、polyline 元素
+3. 颜色要丰富，使用填充色
+4. 图形要居中在 100,100 附近
+5. 只输出SVG代码，不要输出其他任何内容（不要markdown代码块标记，不要解释文字）
+6. 图形要简洁但可辨认，适合Canvas渲染
+7. SVG标签必须有xmlns属性：xmlns="http://www.w3.org/2000/svg"`;
+
+    const postData = JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `请画：${text}` }
+      ],
+      temperature: 0.7,
+      max_tokens: 2048
+    });
+
+    const apiUrl = new URL(DEEPSEEK_BASE_URL + '/chat/completions');
+
+    const options = {
+      hostname: apiUrl.hostname,
+      path: apiUrl.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    };
+
+    const llmReq = https.request(options, (llmRes) => {
+      let data = '';
+      llmRes.on('data', chunk => data += chunk);
+      llmRes.on('end', () => {
+        try {
+          const result = JSON.parse(data);
+          if (result.choices && result.choices[0]) {
+            let content = result.choices[0].message.content.trim();
+            // 提取SVG代码（可能被markdown代码块包裹）
+            const svgMatch = content.match(/<svg[\s\S]*<\/svg>/);
+            if (svgMatch) {
+              res.json({ success: true, svg: svgMatch[0] });
+            } else {
+              // 如果没有找到SVG标签，尝试直接使用内容
+              res.json({ success: false, error: '未生成有效的SVG代码', raw: content });
+            }
+          } else {
+            res.json({ success: false, error: '大模型返回异常', raw: data });
+          }
+        } catch (e) {
+          console.error('解析DeepSeek SVG响应失败:', e.message);
+          res.json({ success: false, error: '解析大模型响应失败' });
+        }
+      });
+    });
+
+    llmReq.on('error', (e) => {
+      console.error('DeepSeek SVG请求失败:', e.message);
+      res.json({ success: false, error: e.message });
+    });
+
+    llmReq.write(postData);
+    llmReq.end();
+
+  } catch (e) {
+    console.error('DeepSeek SVG代理错误:', e.message);
     res.json({ success: false, error: e.message });
   }
 });

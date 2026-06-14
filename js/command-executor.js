@@ -11,9 +11,9 @@ class CommandExecutor {
   /**
    * 执行指令
    * @param {object} command - 指令对象 { intent, params, raw }
-   * @returns {boolean} 是否执行成功
+   * @returns {Promise<boolean>} 是否执行成功
    */
-  execute(command) {
+  async execute(command) {
     if (!command || !command.intent) {
       if (this.feedback) this.feedback.speak('未识别到指令');
       return false;
@@ -27,6 +27,8 @@ class CommandExecutor {
         return this._executeDrawShape(command.params);
       case 'draw_preset':
         return this._executeDrawPreset(command.params);
+      case 'draw_svg':
+        return await this._executeDrawSVG(command.params);
       case 'set_color':
         return this._executeSetColor(command.params);
       case 'set_linewidth':
@@ -61,6 +63,24 @@ class CommandExecutor {
         return this._executePause();
       case 'resume':
         return this._executeResume();
+      case 'turtle_start':
+        return this._executeTurtleStart(command.params);
+      case 'turtle_stop':
+        return this._executeTurtleStop(command.params);
+      case 'turtle_forward':
+        return this._executeTurtleForward(command.params);
+      case 'turtle_backward':
+        return this._executeTurtleBackward(command.params);
+      case 'turtle_turn_left':
+        return this._executeTurtleTurnLeft(command.params);
+      case 'turtle_turn_right':
+        return this._executeTurtleTurnRight(command.params);
+      case 'turtle_pen_up':
+        return this._executeTurtlePenUp(command.params);
+      case 'turtle_pen_down':
+        return this._executeTurtlePenDown(command.params);
+      case 'turtle_arc':
+        return this._executeTurtleArc(command.params);
       default:
         if (this.feedback) this.feedback.speak('未知指令');
         return false;
@@ -71,6 +91,11 @@ class CommandExecutor {
    * 执行绘图指令
    */
   _executeDrawShape(params) {
+    // 海龟模式激活时，同步光标到海龟位置
+    if (this.renderer.turtle.visible) {
+      this.renderer.setCursor(this.renderer.turtle.x, this.renderer.turtle.y);
+    }
+
     // LLM可能返回不同的图形名称，统一映射
     const shapeAliases = {
       'square': 'rect', 'rectangle': 'rect', '长方形': 'rect', '正方形': 'rect',
@@ -291,6 +316,10 @@ class CommandExecutor {
    * 执行移动指令
    */
   _executeMoveTo(params) {
+    // 海龟模式激活时，移动海龟而非普通光标
+    if (this.renderer.turtle.visible) {
+      return this._executeTurtleMoveTo(params);
+    }
     if (params.position) {
       this.renderer.moveCursorToPosition(params.position);
       if (this.feedback) this.feedback.speak(`已移到${params.position}`);
@@ -315,13 +344,79 @@ class CommandExecutor {
   }
 
   /**
+   * 海龟模式下的移动
+   */
+  _executeTurtleMoveTo(params) {
+    const t = this.renderer.turtle;
+    if (params.position) {
+      // 移到预设位置
+      const pos = resolvePosition(params.position, this.renderer.width, this.renderer.height);
+      const oldX = t.x, oldY = t.y;
+      t.x = pos.x; t.y = pos.y;
+      if (t.penDown) {
+        t.paths.push({ type: 'segment', x1: oldX, y1: oldY, x2: t.x, y2: t.y, style: { ...this.renderer.currentStyle } });
+      }
+      this.renderer.redraw();
+      if (this.feedback) this.feedback.speak(`已移到${params.position}`);
+    } else if (params.direction) {
+      // 按方向移动
+      const dist = params.distance || 50;
+      const oldAngle = t.angle;
+      switch (params.direction) {
+        case 'up': t.angle = -90; break;
+        case 'down': t.angle = 90; break;
+        case 'left': t.angle = 180; break;
+        case 'right': t.angle = 0; break;
+      }
+      const rad = t.angle * Math.PI / 180;
+      const oldX = t.x, oldY = t.y;
+      t.x = oldX + dist * Math.cos(rad);
+      t.y = oldY + dist * Math.sin(rad);
+      if (t.penDown) {
+        t.paths.push({ type: 'segment', x1: oldX, y1: oldY, x2: t.x, y2: t.y, style: { ...this.renderer.currentStyle } });
+      }
+      t.angle = oldAngle; // 恢复原来的朝向
+      this.renderer.redraw();
+      const dirNames = { up: '上', down: '下', left: '左', right: '右' };
+      const penState = t.penDown ? '画线' : '移动';
+      if (this.feedback) this.feedback.speak(`向${dirNames[params.direction]}${penState}${dist}`);
+    }
+    return true;
+  }
+
+  /**
    * 执行方向绘图指令
    */
   _executeDrawDirection(params) {
     const direction = params.direction || 'right';
     const distance = params.distance || 100;
 
-    // 在指定方向画线
+    // 海龟模式激活时，用海龟画方向线
+    if (this.renderer.turtle.visible) {
+      const t = this.renderer.turtle;
+      const oldAngle = t.angle;
+      switch (direction) {
+        case 'up': t.angle = -90; break;
+        case 'down': t.angle = 90; break;
+        case 'left': t.angle = 180; break;
+        case 'right': t.angle = 0; break;
+      }
+      const rad = t.angle * Math.PI / 180;
+      const oldX = t.x, oldY = t.y;
+      t.x = oldX + distance * Math.cos(rad);
+      t.y = oldY + distance * Math.sin(rad);
+      if (t.penDown) {
+        t.paths.push({ type: 'segment', x1: oldX, y1: oldY, x2: t.x, y2: t.y, style: { ...this.renderer.currentStyle } });
+      }
+      t.angle = oldAngle;
+      this.renderer.redraw();
+      const dirNames = { up: '上', down: '下', left: '左', right: '右' };
+      const penState = t.penDown ? '画线' : '移动';
+      if (this.feedback) this.feedback.speak(`向${dirNames[direction]}${penState}${distance}`);
+      return true;
+    }
+
+    // 非海龟模式：在指定方向画线
     const shapeObj = this.renderer.createLineAtCursor(distance, direction);
     this.renderer.addShape(shapeObj);
 
@@ -524,9 +619,74 @@ class CommandExecutor {
   }
 
   /**
+   * 执行AI生成SVG图形指令
+   */
+  async _executeDrawSVG(params) {
+    // 海龟模式激活时，同步光标到海龟位置
+    if (this.renderer.turtle.visible) {
+      this.renderer.setCursor(this.renderer.turtle.x, this.renderer.turtle.y);
+    }
+
+    // 如果指定了位置，先移动光标
+    if (params.position) {
+      this.renderer.moveCursorToPosition(params.position);
+    }
+
+    // 如果指定了颜色，更新样式
+    if (params.color) {
+      this.renderer.updateStyle('strokeColor', params.color);
+      this.renderer.updateStyle('fillColor', params.color);
+    }
+
+    const description = params.description || '图形';
+    const scale = params.scale || 1;
+
+    try {
+      // 调用后端接口获取 SVG 代码
+      const response = await fetch('/api/deepseek/svg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: description })
+      });
+
+      const result = await response.json();
+
+      if (!result.success || !result.svg) {
+        if (this.feedback) this.feedback.speak('生成图形失败，请重试');
+        console.error('SVG生成失败:', result.error);
+        return false;
+      }
+
+      // 创建 SVG 图形
+      const shapeObj = this.renderer.createSVGAtCursor(result.svg, scale);
+      this.renderer.addShape(shapeObj);
+
+      // 记录到操作历史
+      this.history.push({
+        type: 'add_shape',
+        shapeId: shapeObj.id,
+        shape: shapeObj
+      });
+
+      // 语音反馈
+      if (this.feedback) this.feedback.speak(`已画${description}`);
+      return true;
+    } catch (e) {
+      console.error('SVG生成请求失败:', e);
+      if (this.feedback) this.feedback.speak('生成图形出错');
+      return false;
+    }
+  }
+
+  /**
    * 执行预设模板绘制
    */
   _executeDrawPreset(params) {
+    // 海龟模式激活时，同步光标到海龟位置
+    if (this.renderer.turtle.visible) {
+      this.renderer.setCursor(this.renderer.turtle.x, this.renderer.turtle.y);
+    }
+
     const preset = params.preset || 'tree';
     const cx = this.renderer.cursorX;
     const cy = this.renderer.cursorY;
@@ -565,6 +725,36 @@ class CommandExecutor {
       case 'heart':
         shapes.push(...this._presetHeart(cx, cy, style));
         break;
+      case 'cat':
+        shapes.push(...this._presetCat(cx, cy, style));
+        break;
+      case 'dog':
+        shapes.push(...this._presetDog(cx, cy, style));
+        break;
+      case 'fish':
+        shapes.push(...this._presetFish(cx, cy, style));
+        break;
+      case 'butterfly':
+        shapes.push(...this._presetButterfly(cx, cy, style));
+        break;
+      case 'bird':
+        shapes.push(...this._presetBird(cx, cy, style));
+        break;
+      case 'rabbit':
+        shapes.push(...this._presetRabbit(cx, cy, style));
+        break;
+      case 'bear':
+        shapes.push(...this._presetBear(cx, cy, style));
+        break;
+      case 'panda':
+        shapes.push(...this._presetPanda(cx, cy, style));
+        break;
+      case 'penguin':
+        shapes.push(...this._presetPenguin(cx, cy, style));
+        break;
+      case 'frog':
+        shapes.push(...this._presetFrog(cx, cy, style));
+        break;
     }
 
     // 添加所有图形
@@ -573,7 +763,9 @@ class CommandExecutor {
       this.history.push({ type: 'add_shape', shapeId: shape.id, shape });
     }
 
-    const presetNames = { tree: '树', house: '房子', sun: '太阳', flower: '花', smiley: '笑脸', face: '人脸', heart: '爱心' };
+    const presetNames = { tree: '树', house: '房子', sun: '太阳', flower: '花', smiley: '笑脸', face: '人脸', heart: '爱心',
+      cat: '猫', dog: '狗', fish: '鱼', butterfly: '蝴蝶', bird: '鸟', rabbit: '兔子',
+      bear: '熊', panda: '熊猫', penguin: '企鹅', frog: '青蛙' };
     if (this.feedback) this.feedback.speak(`已画${presetNames[preset] || preset}`);
     return true;
   }
@@ -676,5 +868,427 @@ class CommandExecutor {
     shapes.push(ShapeFactory.createShape('triangle', { x: cx, y: cy + 25, size: 50 },
       { ...style, fillColor: '#FF1493', strokeColor: '#FF1493', fill: true }));
     return shapes;
+  }
+
+  // ===== 动物预设模板 =====
+
+  _presetCat(cx, cy, style) {
+    const shapes = [];
+    // 头
+    shapes.push(ShapeFactory.createShape('circle', { x: cx, y: cy, radius: 40 },
+      { ...style, fillColor: '#FFA500', strokeColor: '#E08000', fill: true, lineWidth: 2 }));
+    // 左耳
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx - 25, y: cy - 45, size: 25 },
+      { ...style, fillColor: '#FFA500', strokeColor: '#E08000', fill: true }));
+    // 右耳
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx + 25, y: cy - 45, size: 25 },
+      { ...style, fillColor: '#FFA500', strokeColor: '#E08000', fill: true }));
+    // 左内耳
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx - 25, y: cy - 43, size: 14 },
+      { ...style, fillColor: '#FFB6C1', strokeColor: '#FFB6C1', fill: true }));
+    // 右内耳
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx + 25, y: cy - 43, size: 14 },
+      { ...style, fillColor: '#FFB6C1', strokeColor: '#FFB6C1', fill: true }));
+    // 左眼
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 14, y: cy - 8, radius: 5 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 右眼
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 14, y: cy - 8, radius: 5 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 鼻子
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx, y: cy + 5, size: 8 },
+      { ...style, fillColor: '#FFB6C1', strokeColor: '#FFB6C1', fill: true }));
+    // 嘴巴（两条短线）
+    shapes.push(ShapeFactory.createShape('line', { x1: cx, y1: cy + 9, x2: cx - 8, y2: cy + 16 },
+      { ...style, strokeColor: '#000000', lineWidth: 2 }));
+    shapes.push(ShapeFactory.createShape('line', { x1: cx, y1: cy + 9, x2: cx + 8, y2: cy + 16 },
+      { ...style, strokeColor: '#000000', lineWidth: 2 }));
+    // 胡须（左3条）
+    shapes.push(ShapeFactory.createShape('line', { x1: cx - 12, y1: cy + 6, x2: cx - 35, y2: cy + 2 },
+      { ...style, strokeColor: '#000000', lineWidth: 1 }));
+    shapes.push(ShapeFactory.createShape('line', { x1: cx - 12, y1: cy + 9, x2: cx - 35, y2: cy + 9 },
+      { ...style, strokeColor: '#000000', lineWidth: 1 }));
+    shapes.push(ShapeFactory.createShape('line', { x1: cx - 12, y1: cy + 12, x2: cx - 35, y2: cy + 16 },
+      { ...style, strokeColor: '#000000', lineWidth: 1 }));
+    // 胡须（右3条）
+    shapes.push(ShapeFactory.createShape('line', { x1: cx + 12, y1: cy + 6, x2: cx + 35, y2: cy + 2 },
+      { ...style, strokeColor: '#000000', lineWidth: 1 }));
+    shapes.push(ShapeFactory.createShape('line', { x1: cx + 12, y1: cy + 9, x2: cx + 35, y2: cy + 9 },
+      { ...style, strokeColor: '#000000', lineWidth: 1 }));
+    shapes.push(ShapeFactory.createShape('line', { x1: cx + 12, y1: cy + 12, x2: cx + 35, y2: cy + 16 },
+      { ...style, strokeColor: '#000000', lineWidth: 1 }));
+    return shapes;
+  }
+
+  _presetDog(cx, cy, style) {
+    const shapes = [];
+    // 头
+    shapes.push(ShapeFactory.createShape('circle', { x: cx, y: cy, radius: 40 },
+      { ...style, fillColor: '#8B4513', strokeColor: '#6B3410', fill: true, lineWidth: 2 }));
+    // 左耳（椭圆，下垂）
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx - 35, y: cy - 5, radiusX: 12, radiusY: 25 },
+      { ...style, fillColor: '#5C2E00', strokeColor: '#5C2E00', fill: true }));
+    // 右耳
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx + 35, y: cy - 5, radiusX: 12, radiusY: 25 },
+      { ...style, fillColor: '#5C2E00', strokeColor: '#5C2E00', fill: true }));
+    // 左眼
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 14, y: cy - 8, radius: 5 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 右眼
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 14, y: cy - 8, radius: 5 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 鼻子
+    shapes.push(ShapeFactory.createShape('circle', { x: cx, y: cy + 8, radius: 7 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 嘴巴（弧线）
+    shapes.push(ShapeFactory.createShape('line', { x1: cx - 12, y1: cy + 18, x2: cx, y2: cy + 24 },
+      { ...style, strokeColor: '#000000', lineWidth: 2 }));
+    shapes.push(ShapeFactory.createShape('line', { x1: cx, y1: cy + 24, x2: cx + 12, y2: cy + 18 },
+      { ...style, strokeColor: '#000000', lineWidth: 2 }));
+    // 舌头
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx, y: cy + 28, radiusX: 6, radiusY: 9 },
+      { ...style, fillColor: '#FFB6C1', strokeColor: '#FF69B4', fill: true }));
+    return shapes;
+  }
+
+  _presetFish(cx, cy, style) {
+    const shapes = [];
+    // 身体
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx, y: cy, radiusX: 40, radiusY: 22 },
+      { ...style, fillColor: '#4169E1', strokeColor: '#1E3A8A', fill: true, lineWidth: 2 }));
+    // 尾巴
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx + 50, y: cy, size: 30 },
+      { ...style, fillColor: '#1E3A8A', strokeColor: '#1E3A8A', fill: true }));
+    // 眼睛（白色底）
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 18, y: cy - 5, radius: 6 },
+      { ...style, fillColor: '#FFFFFF', strokeColor: '#FFFFFF', fill: true }));
+    // 眼睛（黑色瞳孔）
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 16, y: cy - 5, radius: 3 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 上鳍
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx - 5, y: cy - 28, size: 18 },
+      { ...style, fillColor: '#6495ED', strokeColor: '#6495ED', fill: true }));
+    // 下鳍
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx + 5, y: cy + 25, size: 14 },
+      { ...style, fillColor: '#6495ED', strokeColor: '#6495ED', fill: true }));
+    return shapes;
+  }
+
+  _presetButterfly(cx, cy, style) {
+    const shapes = [];
+    // 身体
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx, y: cy, radiusX: 5, radiusY: 25 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 左上翅膀
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx - 22, y: cy - 12, radiusX: 20, radiusY: 16 },
+      { ...style, fillColor: '#9370DB', strokeColor: '#7B2FBE', fill: true, lineWidth: 2 }));
+    // 右上翅膀
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx + 22, y: cy - 12, radiusX: 20, radiusY: 16 },
+      { ...style, fillColor: '#FF69B4', strokeColor: '#FF1493', fill: true, lineWidth: 2 }));
+    // 左下翅膀
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx - 18, y: cy + 12, radiusX: 14, radiusY: 12 },
+      { ...style, fillColor: '#FFD700', strokeColor: '#DAA520', fill: true, lineWidth: 2 }));
+    // 右下翅膀
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx + 18, y: cy + 12, radiusX: 14, radiusY: 12 },
+      { ...style, fillColor: '#FFA500', strokeColor: '#FF8C00', fill: true, lineWidth: 2 }));
+    // 左触角
+    shapes.push(ShapeFactory.createShape('line', { x1: cx - 2, y1: cy - 25, x2: cx - 15, y2: cy - 42 },
+      { ...style, strokeColor: '#000000', lineWidth: 2 }));
+    // 右触角
+    shapes.push(ShapeFactory.createShape('line', { x1: cx + 2, y1: cy - 25, x2: cx + 15, y2: cy - 42 },
+      { ...style, strokeColor: '#000000', lineWidth: 2 }));
+    // 触角顶端小球
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 15, y: cy - 42, radius: 3 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 15, y: cy - 42, radius: 3 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    return shapes;
+  }
+
+  _presetBird(cx, cy, style) {
+    const shapes = [];
+    // 身体
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx, y: cy + 5, radiusX: 30, radiusY: 22 },
+      { ...style, fillColor: '#87CEEB', strokeColor: '#5BA3C9', fill: true, lineWidth: 2 }));
+    // 头
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 20, y: cy - 18, radius: 16 },
+      { ...style, fillColor: '#87CEEB', strokeColor: '#5BA3C9', fill: true, lineWidth: 2 }));
+    // 眼睛
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 24, y: cy - 20, radius: 4 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 嘴巴
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx - 40, y: cy - 16, size: 14 },
+      { ...style, fillColor: '#FFA500', strokeColor: '#FF8C00', fill: true }));
+    // 翅膀
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx + 5, y: cy - 5, radiusX: 22, radiusY: 12 },
+      { ...style, fillColor: '#4169E1', strokeColor: '#1E3A8A', fill: true }));
+    // 尾巴
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx + 38, y: cy + 5, size: 20 },
+      { ...style, fillColor: '#4169E1', strokeColor: '#1E3A8A', fill: true }));
+    return shapes;
+  }
+
+  _presetRabbit(cx, cy, style) {
+    const shapes = [];
+    // 头
+    shapes.push(ShapeFactory.createShape('circle', { x: cx, y: cy, radius: 38 },
+      { ...style, fillColor: '#FFFFFF', strokeColor: '#C0C0C0', fill: true, lineWidth: 2 }));
+    // 左耳
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx - 16, y: cy - 55, radiusX: 10, radiusY: 28 },
+      { ...style, fillColor: '#FFFFFF', strokeColor: '#C0C0C0', fill: true, lineWidth: 2 }));
+    // 左内耳
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx - 16, y: cy - 55, radiusX: 5, radiusY: 20 },
+      { ...style, fillColor: '#FFB6C1', strokeColor: '#FFB6C1', fill: true }));
+    // 右耳
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx + 16, y: cy - 55, radiusX: 10, radiusY: 28 },
+      { ...style, fillColor: '#FFFFFF', strokeColor: '#C0C0C0', fill: true, lineWidth: 2 }));
+    // 右内耳
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx + 16, y: cy - 55, radiusX: 5, radiusY: 20 },
+      { ...style, fillColor: '#FFB6C1', strokeColor: '#FFB6C1', fill: true }));
+    // 左眼
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 13, y: cy - 6, radius: 5 },
+      { ...style, fillColor: '#FF0000', strokeColor: '#FF0000', fill: true }));
+    // 右眼
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 13, y: cy - 6, radius: 5 },
+      { ...style, fillColor: '#FF0000', strokeColor: '#FF0000', fill: true }));
+    // 鼻子
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx, y: cy + 8, size: 8 },
+      { ...style, fillColor: '#FFB6C1', strokeColor: '#FFB6C1', fill: true }));
+    // 嘴巴
+    shapes.push(ShapeFactory.createShape('line', { x1: cx, y1: cy + 12, x2: cx - 8, y2: cy + 20 },
+      { ...style, strokeColor: '#000000', lineWidth: 2 }));
+    shapes.push(ShapeFactory.createShape('line', { x1: cx, y1: cy + 12, x2: cx + 8, y2: cy + 20 },
+      { ...style, strokeColor: '#000000', lineWidth: 2 }));
+    return shapes;
+  }
+
+  _presetBear(cx, cy, style) {
+    const shapes = [];
+    // 头
+    shapes.push(ShapeFactory.createShape('circle', { x: cx, y: cy, radius: 42 },
+      { ...style, fillColor: '#8B4513', strokeColor: '#6B3410', fill: true, lineWidth: 2 }));
+    // 左耳
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 32, y: cy - 30, radius: 14 },
+      { ...style, fillColor: '#5C2E00', strokeColor: '#5C2E00', fill: true }));
+    // 右耳
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 32, y: cy - 30, radius: 14 },
+      { ...style, fillColor: '#5C2E00', strokeColor: '#5C2E00', fill: true }));
+    // 左眼
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 14, y: cy - 8, radius: 5 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 右眼
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 14, y: cy - 8, radius: 5 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 鼻子
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx, y: cy + 8, radiusX: 10, radiusY: 7 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 嘴巴
+    shapes.push(ShapeFactory.createShape('line', { x1: cx - 10, y1: cy + 20, x2: cx, y2: cy + 26 },
+      { ...style, strokeColor: '#000000', lineWidth: 2 }));
+    shapes.push(ShapeFactory.createShape('line', { x1: cx, y1: cy + 26, x2: cx + 10, y2: cy + 20 },
+      { ...style, strokeColor: '#000000', lineWidth: 2 }));
+    return shapes;
+  }
+
+  _presetPanda(cx, cy, style) {
+    const shapes = [];
+    // 头
+    shapes.push(ShapeFactory.createShape('circle', { x: cx, y: cy, radius: 42 },
+      { ...style, fillColor: '#FFFFFF', strokeColor: '#000000', fill: true, lineWidth: 2 }));
+    // 左耳
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 32, y: cy - 30, radius: 14 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 右耳
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 32, y: cy - 30, radius: 14 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 左眼圈
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx - 14, y: cy - 6, radiusX: 12, radiusY: 10 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 右眼圈
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx + 14, y: cy - 6, radiusX: 12, radiusY: 10 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 左眼（白色瞳孔）
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 14, y: cy - 6, radius: 4 },
+      { ...style, fillColor: '#FFFFFF', strokeColor: '#FFFFFF', fill: true }));
+    // 右眼
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 14, y: cy - 6, radius: 4 },
+      { ...style, fillColor: '#FFFFFF', strokeColor: '#FFFFFF', fill: true }));
+    // 鼻子
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx, y: cy + 10, radiusX: 7, radiusY: 5 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 嘴巴
+    shapes.push(ShapeFactory.createShape('line', { x1: cx - 8, y1: cy + 18, x2: cx, y2: cy + 24 },
+      { ...style, strokeColor: '#000000', lineWidth: 2 }));
+    shapes.push(ShapeFactory.createShape('line', { x1: cx, y1: cy + 24, x2: cx + 8, y2: cy + 18 },
+      { ...style, strokeColor: '#000000', lineWidth: 2 }));
+    return shapes;
+  }
+
+  _presetPenguin(cx, cy, style) {
+    const shapes = [];
+    // 身体
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx, y: cy + 10, radiusX: 30, radiusY: 40 },
+      { ...style, fillColor: '#000000', strokeColor: '#333333', fill: true, lineWidth: 2 }));
+    // 肚子
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx, y: cy + 15, radiusX: 20, radiusY: 30 },
+      { ...style, fillColor: '#FFFFFF', strokeColor: '#FFFFFF', fill: true }));
+    // 左眼（白色）
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 10, y: cy - 12, radius: 6 },
+      { ...style, fillColor: '#FFFFFF', strokeColor: '#FFFFFF', fill: true }));
+    // 左眼（黑色瞳孔）
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 10, y: cy - 12, radius: 3 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 右眼（白色）
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 10, y: cy - 12, radius: 6 },
+      { ...style, fillColor: '#FFFFFF', strokeColor: '#FFFFFF', fill: true }));
+    // 右眼（黑色瞳孔）
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 10, y: cy - 12, radius: 3 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 嘴巴
+    shapes.push(ShapeFactory.createShape('triangle', { x: cx, y: cy - 2, size: 12 },
+      { ...style, fillColor: '#FFA500', strokeColor: '#FF8C00', fill: true }));
+    // 左脚
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx - 14, y: cy + 52, radiusX: 10, radiusY: 5 },
+      { ...style, fillColor: '#FFA500', strokeColor: '#FF8C00', fill: true }));
+    // 右脚
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx + 14, y: cy + 52, radiusX: 10, radiusY: 5 },
+      { ...style, fillColor: '#FFA500', strokeColor: '#FF8C00', fill: true }));
+    return shapes;
+  }
+
+  _presetFrog(cx, cy, style) {
+    const shapes = [];
+    // 头
+    shapes.push(ShapeFactory.createShape('circle', { x: cx, y: cy, radius: 38 },
+      { ...style, fillColor: '#228B22', strokeColor: '#1A6B1A', fill: true, lineWidth: 2 }));
+    // 左眼突出（白色底）
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 18, y: cy - 28, radius: 12 },
+      { ...style, fillColor: '#FFFFFF', strokeColor: '#228B22', fill: true, lineWidth: 2 }));
+    // 左眼瞳孔
+    shapes.push(ShapeFactory.createShape('circle', { x: cx - 18, y: cy - 28, radius: 5 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 右眼突出（白色底）
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 18, y: cy - 28, radius: 12 },
+      { ...style, fillColor: '#FFFFFF', strokeColor: '#228B22', fill: true, lineWidth: 2 }));
+    // 右眼瞳孔
+    shapes.push(ShapeFactory.createShape('circle', { x: cx + 18, y: cy - 28, radius: 5 },
+      { ...style, fillColor: '#000000', strokeColor: '#000000', fill: true }));
+    // 嘴巴（大弧线）
+    shapes.push(ShapeFactory.createShape('line', { x1: cx - 25, y1: cy + 12, x2: cx, y2: cy + 20 },
+      { ...style, strokeColor: '#1A6B1A', lineWidth: 3 }));
+    shapes.push(ShapeFactory.createShape('line', { x1: cx, y1: cy + 20, x2: cx + 25, y2: cy + 12 },
+      { ...style, strokeColor: '#1A6B1A', lineWidth: 3 }));
+    // 身体
+    shapes.push(ShapeFactory.createShape('ellipse', { x: cx, y: cy + 45, radiusX: 28, radiusY: 22 },
+      { ...style, fillColor: '#32CD32', strokeColor: '#228B22', fill: true, lineWidth: 2 }));
+    return shapes;
+  }
+
+  // ===== 海龟画图指令执行方法 =====
+
+  /**
+   * 启动海龟画笔模式
+   */
+  _executeTurtleStart(params) {
+    this.renderer.startTurtle();
+    if (this.feedback) this.feedback.speak('画笔模式已启动');
+    return true;
+  }
+
+  /**
+   * 停止海龟画笔模式
+   */
+  _executeTurtleStop(params) {
+    // 将所有海龟路径合并为一个 shape 添加到 shapes 列表
+    const turtlePaths = this.renderer.turtle.paths;
+    if (turtlePaths.length > 0) {
+      // 将海龟路径转为一个复合图形保存
+      const shapeObj = ShapeFactory.createShape('line', {
+        x1: this.renderer.turtle.x, y1: this.renderer.turtle.y,
+        x2: this.renderer.turtle.x, y2: this.renderer.turtle.y
+      }, this.renderer.currentStyle);
+      // 把海龟路径数据附加到 shape 上，以便 redraw 时绘制
+      shapeObj.turtlePaths = [...turtlePaths];
+      this.renderer.addShape(shapeObj);
+      this.history.push({
+        type: 'add_shape',
+        shapeId: shapeObj.id,
+        shape: shapeObj
+      });
+    }
+    this.renderer.stopTurtle();
+    if (this.feedback) this.feedback.speak('画笔模式已关闭');
+    return true;
+  }
+
+  /**
+   * 海龟前进
+   */
+  _executeTurtleForward(params) {
+    const distance = params.distance || 50;
+    this.renderer.turtleForward(distance);
+    const penState = this.renderer.turtle.penDown ? '画线' : '移动';
+    if (this.feedback) this.feedback.speak(`${penState}${distance}`);
+    return true;
+  }
+
+  /**
+   * 海龟后退
+   */
+  _executeTurtleBackward(params) {
+    const distance = params.distance || 50;
+    this.renderer.turtleBackward(distance);
+    const penState = this.renderer.turtle.penDown ? '画线' : '移动';
+    if (this.feedback) this.feedback.speak(`后退${penState}${distance}`);
+    return true;
+  }
+
+  /**
+   * 海龟左转
+   */
+  _executeTurtleTurnLeft(params) {
+    const degrees = params.degrees || 90;
+    this.renderer.turtleTurnLeft(degrees);
+    if (this.feedback) this.feedback.speak(`左转${degrees}度`);
+    return true;
+  }
+
+  /**
+   * 海龟右转
+   */
+  _executeTurtleTurnRight(params) {
+    const degrees = params.degrees || 90;
+    this.renderer.turtleTurnRight(degrees);
+    if (this.feedback) this.feedback.speak(`右转${degrees}度`);
+    return true;
+  }
+
+  /**
+   * 抬笔
+   */
+  _executeTurtlePenUp(params) {
+    this.renderer.turtlePenUp();
+    if (this.feedback) this.feedback.speak('抬笔，移动时不画线');
+    return true;
+  }
+
+  /**
+   * 落笔
+   */
+  _executeTurtlePenDown(params) {
+    this.renderer.turtlePenDown();
+    if (this.feedback) this.feedback.speak('落笔，移动时画线');
+    return true;
+  }
+
+  /**
+   * 海龟画弧线
+   */
+  _executeTurtleArc(params) {
+    const radius = params.radius || 50;
+    const angle = params.angle || 90;
+    this.renderer.turtleArc(radius, angle);
+    if (this.feedback) this.feedback.speak(`画弧线`);
+    return true;
   }
 }

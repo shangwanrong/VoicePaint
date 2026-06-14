@@ -175,7 +175,7 @@ app.post('/api/deepseek/chat', async (req, res) => {
 - turtle_backward: 画笔后退。params: { distance: 数字 }
 - turtle_turn_left: 画笔左转。params: { degrees: 数字 }
 - turtle_turn_right: 画笔右转。params: { degrees: 数字 }
-- turtle_pen_up: 抬笔/提笔/台笔（移动不画线）。params: {}
+- turtle_pen_up: 抬笔/提笔/台笔/排比/台币/太笔（移动不画线，这些是语音识别的同音词）。params: {}
 - turtle_pen_down: 落笔（移动画线）。params: {}
 - turtle_arc: 画弧线。params: { radius: 数字, angle: 角度数字 }
 

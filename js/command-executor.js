@@ -91,6 +91,11 @@ class CommandExecutor {
    * 执行绘图指令
    */
   _executeDrawShape(params) {
+    // 海龟模式激活时，同步光标到海龟位置
+    if (this.renderer.turtle.visible) {
+      this.renderer.setCursor(this.renderer.turtle.x, this.renderer.turtle.y);
+    }
+
     // LLM可能返回不同的图形名称，统一映射
     const shapeAliases = {
       'square': 'rect', 'rectangle': 'rect', '长方形': 'rect', '正方形': 'rect',
@@ -617,6 +622,11 @@ class CommandExecutor {
    * 执行AI生成SVG图形指令
    */
   async _executeDrawSVG(params) {
+    // 海龟模式激活时，同步光标到海龟位置
+    if (this.renderer.turtle.visible) {
+      this.renderer.setCursor(this.renderer.turtle.x, this.renderer.turtle.y);
+    }
+
     // 如果指定了位置，先移动光标
     if (params.position) {
       this.renderer.moveCursorToPosition(params.position);
@@ -672,6 +682,11 @@ class CommandExecutor {
    * 执行预设模板绘制
    */
   _executeDrawPreset(params) {
+    // 海龟模式激活时，同步光标到海龟位置
+    if (this.renderer.turtle.visible) {
+      this.renderer.setCursor(this.renderer.turtle.x, this.renderer.turtle.y);
+    }
+
     const preset = params.preset || 'tree';
     const cx = this.renderer.cursorX;
     const cy = this.renderer.cursorY;
